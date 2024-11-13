@@ -11,9 +11,9 @@
 
 /* NoteGroup structure */
 typedef struct {
-    int row;                  // Vertical position of the group
-    bool columns[4];          // Active lanes (true if there's a note in that lane)
-    bool played;              // Whether the entire group has been played correctly
+    int row; // Vertical position of the group
+    bool columns[4]; // Active lanes (true if there's a note in that lane)
+    bool played; // Whether the entire group has been played correctly
 } NoteGroup;
 
 /* Global variables */
@@ -24,7 +24,7 @@ extern NoteGroup noteGroups[MAX_NOTE_GROUPS];
 void init_notes(void);
 void generate_note(void);
 void update_notes(void);
-void validate_input(bool button_states[4], bool strum_button_pressed);
+void validate_strum(bool button_states[4], bool strum_button_pressed);
 void update_display(void);
 
-#endif //
+#endif // GAME_H
