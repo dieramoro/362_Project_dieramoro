@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include "stm32f0xx.h"
 
-
 /* Function Prototypes */
 void SystemClock_Config(void);
 void GPIO_Init(void);
