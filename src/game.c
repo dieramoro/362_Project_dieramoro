@@ -101,6 +101,7 @@ void TIM3_IRQHandler(void) {
 }
 
 // Generate a New Note
+// just random generated for now, can easy change
 void generate_note(Note *note) {
     note->columns = (rand() % 15) + 1;  // Random binary configuration (1–15)
     note->y_position = 0;              // Start at the top
@@ -146,7 +147,14 @@ void game_loop(void) {
                     notes_missed++;  // Note was never played
                     score -= 5;      // Penalize for unplayed note
                 }
-                active_notes--;  // Remove the note from active tracking
+
+                // Shift remaining notes forward in the array
+                for (int j = i; j < active_notes - 1; j++) {
+                    notes[j] = notes[j + 1];
+                }
+
+                active_notes--;  // Decrement active note count
+                i--;             // Recheck this index
             }
         }
 
