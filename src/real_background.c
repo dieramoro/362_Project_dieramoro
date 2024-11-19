@@ -1,6 +1,6 @@
 /* GIMP RGB C-Source image dump (real_background.c) */
 
-static const struct {
+const struct {
   unsigned int 	 width;
   unsigned int 	 height;
   unsigned int 	 bytes_per_pixel; /* 2:RGB16, 3:RGB, 4:RGBA */ 
