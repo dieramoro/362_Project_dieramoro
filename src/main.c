@@ -22,8 +22,8 @@ const char* username = "silva48";
 #include <math.h> 
 #include <stdio.h>
 #include "lcd.h"
-#include "background.c"
-//extern const Picture background;
+// #include "background.c"
+extern const Picture real_background;
 #define FIFOSIZE 16
 char serfifo[FIFOSIZE];
 int seroffset = 0;
@@ -227,7 +227,7 @@ int main() {
     setbuf(stdout,0);
     setbuf(stderr,0);
     LCD_Setup();
-    LCD_DrawPicture(0, 0, &background);
+    LCD_DrawPicture(0, 0, &real_background);
     //drawexamp();
     command_shell();
     init_spi1_slow();
