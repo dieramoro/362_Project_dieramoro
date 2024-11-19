@@ -5,13 +5,10 @@
 #ifndef __LCD_H
 #define __LCD_H
 #include "stdlib.h"
-#include <stdint.h>
-
 
 // shorthand notation for 8-bit and 16-bit unsigned integers
 typedef uint8_t u8;
 typedef uint16_t u16;
-typedef int16_t s16;
 
 // The LCD device structure definition.
 //
@@ -81,20 +78,18 @@ void LCD_DrawTriangle(u16 x0,u16 y0, u16 x1,u16 y1, u16 x2,u16 y2, u16 c);
 void LCD_DrawFillTriangle(u16 x0,u16 y0, u16 x1,u16 y1, u16 x2,u16 y2, u16 c);
 void LCD_DrawChar(u16 x,u16 y,u16 fc, u16 bc, char num, u8 size, u8 mode);
 void LCD_DrawString(u16 x,u16 y, u16 fc, u16 bg, const char *p, u8 size, u8 mode);
+void drawArray(void);
 
 //===========================================================================
 // C Picture data structure.
 //===========================================================================
-typedef struct {
+typedef const struct {
     unsigned int   width;
     unsigned int   height;
     unsigned int   bytes_per_pixel; // 2:RGB16, 3:RGB, 4:RGBA
-    union {
     unsigned char  pixel_data[0]; // variable length array
-    unsigned short pix2[0];
-    };
 } Picture;
 
-void LCD_DrawPicture(int x0, int y0, const Picture *pic);
+void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic);
 
 #endif

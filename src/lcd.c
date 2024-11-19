@@ -4,8 +4,11 @@
 //============================================================================
 
 #include "stm32f0xx.h"
+#include <stdio.h>
 #include <stdint.h>
 #include "lcd.h"
+
+void nano_wait(int t);
 
 lcd_dev_t lcddev;
 
@@ -29,8 +32,7 @@ lcd_dev_t lcddev;
 static void tft_select(int val)
 {
     if (val == 0) {
-        while(SPI1->SR & SPI_SR_BSY)
-            ;
+        while(SPI1->SR & SPI_SR_BSY);
         CS_HIGH;
     } else {
         while((GPIOB->ODR & (CS_BIT)) == 0) {
@@ -66,15 +68,6 @@ static void tft_reg_select(int val)
     }
 }
 
-//============================================================================
-// Wait for n nanoseconds. (Maximum: 4.294 seconds)
-//============================================================================
-static inline void nano_wait(unsigned int n) {
-    asm(    "        mov r0,%0\n"
-            "repeat: sub r0,#83\n"
-            "        bgt repeat\n" : : "r"(n) : "r0", "cc");
-}
-
 void LCD_Reset(void)
 {
     lcddev.reset(1);      // Assert reset
@@ -108,7 +101,7 @@ void SPI_WriteByte(uint8_t Data)
 {
     while((SPI->SR & SPI_SR_TXE) == 0)
         ;
-    *((uint8_t*)&SPI->DR) = Data;
+    *((volatile uint8_t*)&SPI->DR) = Data;
 }
 
 // Write to an LCD "register"
@@ -152,7 +145,7 @@ void LCD_WR_REG(uint8_t data)
         ;
     // Don't clear RS until the previous operation is done.
     lcddev.reg_select(1);
-    *((uint8_t*)&SPI->DR) = data;
+    *((volatile uint8_t*)&SPI->DR) = data;
 }
 
 // Write 8-bit data to the LCD
@@ -162,7 +155,7 @@ void LCD_WR_DATA(uint8_t data)
         ;
     // Don't set RS until the previous operation is done.
     lcddev.reg_select(0);
-    *((uint8_t*)&SPI->DR) = data;
+    *((volatile uint8_t*)&SPI->DR) = data;
 }
 
 // Prepare to write 16-bit data to the LCD
@@ -175,8 +168,7 @@ void LCD_WriteData16_Prepare()
 // Write 16-bit data
 void LCD_WriteData16(u16 data)
 {
-    while((SPI->SR & SPI_SR_TXE) == 0)
-        ;
+    while((SPI->SR & SPI_SR_TXE) == 0);
     SPI->DR = data;
 }
 
@@ -409,6 +401,9 @@ static void _LCD_DrawPoint(u16 x, u16 y, u16 c)
     LCD_WriteData16_End();
 }
 
+
+
+
 void LCD_DrawPoint(u16 x, u16 y, u16 c)
 {
     lcddev.select(1);
@@ -422,8 +417,8 @@ void LCD_DrawPoint(u16 x, u16 y, u16 c)
 static void _LCD_DrawLine(u16 x1, u16 y1, u16 x2, u16 y2, u16 c)
 {
     u16 t;
-    int xerr=0,yerr=0,delta_x,delta_y,distance;
-    int incx,incy,uRow,uCol;
+    volatile int xerr=0,yerr=0,delta_x,delta_y,distance;
+    volatile int incx,incy,uRow,uCol;
 
     delta_x=x2-x1;
     delta_y=y2-y1;
@@ -666,6 +661,26 @@ void LCD_DrawFillTriangle(u16 x0,u16 y0, u16 x1,u16 y1, u16 x2,u16 y2, u16 c)
     lcddev.select(0);
 }
 
+// void LCD_drawArray() {
+//     int16_t * image = Guitar_hero_logo;
+//     int16_t  width = 489;
+//     int16_t  height = 352;
+//     int16_t  x, y;
+//     int16_t  pixelColor;
+
+//     // Set the window to the full area where the image will be displayed
+//     LCD_SetWindow(0, 0, width - 1, height - 1); // Define the area (from top-left to bottom-right)
+
+//     // Loop through each pixel in the image array and draw it
+//     for (y = 0; y < height; y++) {
+//         for (x = 0; x < width; x++) {
+//             pixelColor = image[y * width + x];  // Get the pixel color from the image array (RGB565)
+//             LCD_DrawPoint(x, y, pixelColor);    // Draw the point at (x, y) with the color from the array
+//         }
+//     }
+// }
+
+
 // A 12x6 font
 const unsigned char asc2_1206[95][12]={
 {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},/*" ",0*/
@@ -881,9 +896,9 @@ void _LCD_DrawChar(u16 x,u16 y,u16 fc, u16 bc, char num, u8 size, u8 mode)
         LCD_WriteData16_Prepare();
         for(pos=0;pos<size;pos++) {
             if (size==12)
-                temp=asc2_1206[num][pos];
+                temp=asc2_1206[(int)num][pos];
             else
-                temp=asc2_1608[num][pos];
+                temp=asc2_1608[(int)num][pos];
             for (t=0;t<size/2;t++) {
                 if (temp&0x01)
                     LCD_WriteData16(fc);
@@ -898,9 +913,9 @@ void _LCD_DrawChar(u16 x,u16 y,u16 fc, u16 bc, char num, u8 size, u8 mode)
         for(pos=0;pos<size;pos++)
         {
             if (size==12)
-                temp=asc2_1206[num][pos];
+                temp=asc2_1206[(int)num][pos];
             else
-                temp=asc2_1608[num][pos];
+                temp=asc2_1608[(int)num][pos];
             for (t=0;t<size/2;t++)
             {
                 if(temp&0x01)
@@ -942,7 +957,7 @@ void LCD_DrawString(u16 x,u16 y, u16 fc, u16 bg, const char *p, u8 size, u8 mode
 //===========================================================================
 // Draw a picture with upper left corner at (x0,y0).
 //===========================================================================
-void LCD_DrawPicture(int x0, int y0, const Picture *pic)
+void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
 {
     int x1 = x0 + pic->width-1;
     int y1 = y0 + pic->height-1;
@@ -983,3 +998,4 @@ void LCD_DrawPicture(int x0, int y0, const Picture *pic)
     LCD_WriteData16_End();
     lcddev.select(0);
 }
+
