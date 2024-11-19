@@ -4,7 +4,7 @@ import numpy as np
 
 width = 240
 height = 320
-name = 'background'
+name = 'test_background'
 
 # Initialize to zero
 arr = [ [0 for x in range(0,height)] for y in range(0,width) ]
@@ -41,10 +41,10 @@ for x in range(0, width):
                 arr[x][y] = white
                 img_arr[y, x] = white_rgb
 
-img = Image.fromarray(img_arr)
-img.save('python/background.jpg')
+#img = Image.fromarray(img_arr)
+#img.save('python/background.jpg')
 
-out = open('src/background.c','w')
+out = open('src/{name}.c','w')
 
 # Print out the header
 out.write("const struct {\n")
