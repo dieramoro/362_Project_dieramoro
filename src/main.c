@@ -22,7 +22,8 @@ const char* username = "silva48";
 #include <math.h> 
 #include <stdio.h>
 #include "lcd.h"
-extern const Picture background;
+#include "background.c"
+//extern const Picture background;
 #define FIFOSIZE 16
 char serfifo[FIFOSIZE];
 int seroffset = 0;
@@ -225,7 +226,7 @@ int main() {
     setbuf(stdin,0);
     setbuf(stdout,0);
     setbuf(stderr,0);
-    lcd_init();
+    LCD_Setup();
     LCD_DrawPicture(0, 0, &background);
     //drawexamp();
     command_shell();
