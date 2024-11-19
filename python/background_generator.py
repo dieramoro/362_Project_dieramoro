@@ -4,7 +4,7 @@ import numpy as np
 
 width = 240
 height = 320
-name = 'test_background'
+name = 'background'
 
 # Initialize to zero
 arr = [ [0 for x in range(0,height)] for y in range(0,width) ]

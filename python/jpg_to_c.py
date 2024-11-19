@@ -2,7 +2,7 @@ from PIL import Image
 import sys
 
 jpg_path = "python/real_background.jpg"    # Replace with your jpg file name
-c_path = "src/real_background.c"
+c_path = "src/background.c"
 
 try:
     # Open the image file
