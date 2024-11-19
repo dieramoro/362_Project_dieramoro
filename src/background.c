@@ -3,7 +3,7 @@ const struct {
   unsigned int height;
   unsigned int bytes_per_pixel; /* 2 */
   unsigned char pixel_data[153600 + 1];
-} real_background = {
+} background = {
   240, 320, 2,
   {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
