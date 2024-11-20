@@ -22,7 +22,6 @@ const char* username = "silva48";
 #include <math.h> 
 #include <stdio.h>
 #include "lcd.h"
-#include "dma.c"
 #define FIFOSIZE 16
 //#define MAX_Y_coordinate 2000
 char serfifo[FIFOSIZE];
@@ -247,7 +246,6 @@ void init_spi1_slow(){
 
     // Enable SPI1 and DMA1 clocks
     RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
-    RCC->AHBENR |= RCC_AHBENR_DMA1EN;
 
     SPI1->CR1 &= ~(SPI_CR1_SPE);
     SPI1->CR1 |= 0x0038;
@@ -255,10 +253,6 @@ void init_spi1_slow(){
     SPI1->CR2 |= (SPI_CR2_DS_0|SPI_CR2_DS_1|SPI_CR2_DS_2|SPI_CR2_DS_3);
     SPI1->CR2 &= ~(SPI_CR2_DS_3);  
     SPI1->CR1 |= (SPI_CR1_SSM | SPI_CR1_SSI);
-
-    // Enable DMA requests for SPI1
-    SPI1->CR2 |= SPI_CR2_TXDMAEN;
-
     SPI1->CR2 |= SPI_CR2_FRXTH;
     SPI1->CR1 |= SPI_CR1_SPE;
 
@@ -306,6 +300,7 @@ int main() {
     internal_clock();
     init_usart5();
     enable_tty_interrupt();
+    setup_dma5();
 
     setbuf(stdin,0);
     setbuf(stdout,0);
@@ -313,9 +308,9 @@ int main() {
 
     LCD_Setup();
     LCD_DrawPicture(0, 0, &background);
-    while(1){
-        display_note(&red_note, lcddev.width/2, lcddev.height/2);   
-    }
+    // while(1){
+    //     display_note(&red_note, lcddev.width/2, lcddev.height/2);   
+    // }
 
     // Diego:
     // Process for drawing a picture will be to call pic_subset to sample background

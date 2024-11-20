@@ -32,17 +32,10 @@ void setup_dma5(void) {
     DMA1_Channel3->CCR |= DMA_CCR_PSIZE_0;
 
     // Set the channel for CIRCular operation.
-    DMA1_Channel3->CCR |= DMA_CCR_CIRC;
+    // DMA1_Channel3->CCR |= DMA_CCR_CIRC;
 
-    // Configure DMA channel selection register for SPI1_TX
-    // CSELR &= ~DMA_CSELR_C3S;
-    // DMA1_CSELR->CSELR |= (1 << 8); // Select Channel 3 for SPI1_TX
-
-    // Set priority to very high
-    DMA1_Channel3->CCR |= DMA_CCR_PL;
-
-    // Enable the DMA
-    DMA1_Channel3->CCR |= DMA_CCR_EN;
+    DMA1->CSELR &= ~DMA_CSELR_C3S;
+    DMA1->CSELR |= (1 << 8);
 }
 
 // New function to start DMA transfer

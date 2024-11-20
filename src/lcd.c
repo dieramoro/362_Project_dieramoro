@@ -1013,25 +1013,13 @@ void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
     LCD_SetWindow(x0,y0,x1,y1);
     LCD_WriteData16_Prepare();
 
-    /*
     u16 *data = (u16 *)pic->pixel_data;
     for(int y=ys; y<ye; y++) {
         u16 *row = &data[y * pic->width + xs];
         for(int x=xs; x<xe; x++)
             LCD_WriteData16(*row++);
     }
-    */
 
-    // Calculate total number of pixels to transfer
-    uint16_t total_pixels = (xe - xs) * (ye - ys);
-    
-    // Start DMA transfer for the entire image data
-    u16 *data = (u16 *)&pic->pix2[ys * pic->width + xs];
-    start_dma_transfer(data, total_pixels);
-
-    // Wait for DMA transfer to complete
-    while(!(DMA1->ISR & DMA_ISR_TCIF3)); // Wait for transfer complete flag
-    DMA1->IFCR |= DMA_IFCR_CTCIF3;       // Clear the flag
 
     LCD_WriteData16_End();
     lcddev.select(0);
