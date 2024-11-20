@@ -24,6 +24,7 @@ const char* username = "silva48";
 #include "lcd.h"
 #include "dma.c"
 #define FIFOSIZE 16
+//#define MAX_Y_coordinate 2000
 char serfifo[FIFOSIZE];
 int seroffset = 0;
 
@@ -227,6 +228,15 @@ void USART3_8_IRQHandler(void) {
     }
 }
 
+void display_note(const Picture *pic, uint16_t x, uint16_t y){
+    for(int i = y; i <= lcddev.height; i= i+ 1){
+        LCD_DrawPicture(x, i, pic);
+        for(int y = 0; y<=1000000; y = y+1);
+        LCD_DrawPicture(0, 0, &background);
+
+    }
+}
+
 #ifdef SHELL
 #include "commands.h"
 void init_spi1_slow(){
@@ -303,6 +313,9 @@ int main() {
 
     LCD_Setup();
     LCD_DrawPicture(0, 0, &background);
+    while(1){
+        display_note(&red_note, lcddev.width/2, lcddev.height/2);   
+    }
 
     // Diego:
     // Process for drawing a picture will be to call pic_subset to sample background
@@ -328,12 +341,12 @@ int main() {
     #endif
 
 
-    command_shell();
-    init_spi1_slow();
-    enable_sdcard();
+    //command_shell();
+    //init_spi1_slow();
+    //enable_sdcard();
     //disable_sdcard();
-    init_sdcard_io();
-    sdcard_io_high_speed();
+    //init_sdcard_io();
+    //sdcard_io_high_speed();
 }
 #endif
 
