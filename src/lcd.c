@@ -342,7 +342,7 @@ __attribute((weak)) void init_lcd_spi(void)
 }
 
 void LCD_Setup() {
-    init_lcd_spi();
+    init_lcd_spi(); // Does this need to be created? 
     tft_select(0);
     tft_reset(0);
     tft_reg_select(0);

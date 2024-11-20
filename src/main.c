@@ -22,11 +22,74 @@ const char* username = "silva48";
 #include <math.h> 
 #include <stdio.h>
 #include "lcd.h"
-// #include "background.c"
-extern const Picture background;
 #define FIFOSIZE 16
 char serfifo[FIFOSIZE];
 int seroffset = 0;
+
+// This C macro will create an array of Picture elements.
+// Really, you'll just use it as a pointer to a single Picture
+// element with an internal pix2[] array large enough to hold
+// an image of the specified size.
+// BE CAREFUL HOW LARGE OF A PICTURE YOU TRY TO CREATE:
+// A 100x100 picture uses 20000 bytes.  You have 32768 bytes of SRAM.
+//
+// Diego: can it be updated to use 1 byte per pixel?
+#define TempPicturePtr(name,width,height) Picture name[(width)*(height)/6+2] = { {width,height,2} }
+
+// Create a note (37x21) plus 1 pixel of padding on all sides
+TempPicturePtr(object, 39, 23);
+
+// These can possibly be compressed further using 8 bit color and RLE compression
+extern const Picture background;
+extern const Picture red_note; // NEEDS TO BE TESTED
+
+// Copy a subset of a large source picture into a smaller destination
+// sx,sy are the offset into the source picture.
+void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
+{
+    int dw = dst->width;
+    int dh = dst->height;
+    for(int y=0; y<dh; y++) {
+        if (y+sy < 0)
+            continue;
+        if (y+sy >= src->height)
+            break;
+        for(int x=0; x<dw; x++) {
+            if (x+sx < 0)
+                continue;
+            if (x+sx >= src->width)
+                break;
+            dst->pix2[dw * y + x] = src->pix2[src->width * (y+sy) + x + sx];
+        }
+    }
+}
+
+// Overlay a picture onto a destination picture.
+// xoffset,yoffset are the offset into the destination picture that the
+// source picture is placed.
+// Any pixel in the source that is the 'transparent' color will not be
+// copied.  This defines a color in the source that can be used as a
+// transparent color.
+void pic_overlay(Picture *dst, int xoffset, int yoffset, const Picture *src, int transparent)
+{
+    for(int y=0; y<src->height; y++) {
+        int dy = y+yoffset;
+        if (dy < 0)
+            continue;
+        if (dy >= dst->height)
+            break;
+        for(int x=0; x<src->width; x++) {
+            int dx = x+xoffset;
+            if (dx < 0)
+                continue;
+            if (dx >= dst->width)
+                break;
+            unsigned short int p = src->pix2[y*src->width + x];
+            if (p != transparent)
+                dst->pix2[dy*dst->width + dx] = p;
+        }
+    }
+}
 
 
 void internal_clock();
@@ -163,7 +226,6 @@ void USART3_8_IRQHandler(void) {
 
 #ifdef SHELL
 #include "commands.h"
-#include <stdio.h>
 void init_spi1_slow(){
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
     GPIOB->MODER &= ~(GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
@@ -223,12 +285,19 @@ int main() {
     internal_clock();
     init_usart5();
     enable_tty_interrupt();
+
     setbuf(stdin,0);
     setbuf(stdout,0);
     setbuf(stderr,0);
+
     LCD_Setup();
     LCD_DrawPicture(0, 0, &background);
-    //drawexamp();
+
+    // Diego:
+    // Process for drawing a picture will be to call pic_subset to sample background
+    // then pic_overlay to overlay the note object on top of it
+    // then LCD_DrawPicture to push it to the display
+
     command_shell();
     init_spi1_slow();
     enable_sdcard();
@@ -237,4 +306,5 @@ int main() {
     sdcard_io_high_speed();
 }
 #endif
+
 // TODO Remember to look up for the proper name of the ISR function

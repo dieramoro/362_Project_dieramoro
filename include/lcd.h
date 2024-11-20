@@ -83,11 +83,14 @@ void drawArray(void);
 //===========================================================================
 // C Picture data structure.
 //===========================================================================
-typedef const struct {
+typedef struct {
     unsigned int   width;
     unsigned int   height;
     unsigned int   bytes_per_pixel; // 2:RGB16, 3:RGB, 4:RGBA
+    union {
     unsigned char  pixel_data[0]; // variable length array
+    unsigned short pix2[0];
+    };
 } Picture;
 
 void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic);
