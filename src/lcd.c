@@ -179,6 +179,30 @@ void LCD_WriteData16_End()
 }
 #endif /* not SLOW_SPI */
 
+#define BIT_8_TEST
+#ifdef BIT_8_TEST
+// Prepare to write 8-bit data to the LCD
+void LCD_WriteData8_Prepare()
+{
+    lcddev.reg_select(0); // Does this need to change?
+    SPI->CR2 &= ~SPI_CR2_DS; // 'Not used' value defaults to 8 bit mode
+}
+
+// Write 16-bit data
+void LCD_WriteData8(u8 data)
+{
+    while((SPI->SR & SPI_SR_TXE) == 0)
+        ;
+    SPI->DR = data;
+}
+
+// Finish writing 16-bit data
+void LCD_WriteData8_End()
+{
+    SPI->CR2 &= ~SPI_CR2_DS; // bad value forces it back to 8-bit mode
+}
+#endif
+
 // Select an LCD "register" and write 8-bit data to it.
 void LCD_WriteReg(uint8_t LCD_Reg, uint16_t LCD_RegValue)
 {
@@ -999,3 +1023,46 @@ void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
     lcddev.select(0);
 }
 
+#ifdef BIT_8_TEST
+void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
+{
+    int x1 = x0 + pic->width-1;
+    int y1 = y0 + pic->height-1;
+    if (x0 >= lcddev.width || y0 >= lcddev.height || x1 < 0 || y1 < 0)
+        return; // Completely outside of screen.  Nothing to do.
+    lcddev.select(1);
+    int xs=0;
+    int ys=0;
+    int xe=pic->width;
+    int ye=pic->height;
+    if (x0 < 0) {
+        xs = -x0;
+        x0 = 0;
+    }
+    if (y0 < 0) {
+        ys = -y0;
+        y0 = 0;
+    }
+    if (x1 >= lcddev.width) {
+        xe -= x1 - (lcddev.width - 1);
+        x1 = lcddev.width - 1;
+    }
+    if (y1 >= lcddev.height) {
+        ye -= y1 - (lcddev.height - 1);
+        y1 = lcddev.height - 1;
+    }
+
+    LCD_SetWindow(x0,y0,x1,y1);
+    LCD_WriteData8_Prepare();
+
+    u8 *data = (u8 *)pic->pixel_data;
+    for(int y=ys; y<ye; y++) {
+        u8 *row = &data[y * pic->width + xs];
+        for(int x=xs; x<xe; x++)
+            LCD_WriteData8(*row++);
+    }
+
+    LCD_WriteData8_End();
+    lcddev.select(0);
+}
+#endif

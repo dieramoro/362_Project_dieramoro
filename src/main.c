@@ -33,8 +33,10 @@ int seroffset = 0;
 // BE CAREFUL HOW LARGE OF A PICTURE YOU TRY TO CREATE:
 // A 100x100 picture uses 20000 bytes.  You have 32768 bytes of SRAM.
 //
-// Diego: can it be updated to use 1 byte per pixel?
-#define TempPicturePtr(name,width,height) Picture name[(width)*(height)/6+2] = { {width,height,2} }
+// Diego: updated to use 1 byte per pixel 
+// IMAGES STILL NEED TO BE UPDATED
+// Can these be created dynamically for multiple notes?
+#define TempPicturePtr(name,width,height) Picture name[(width)*(height)/6+2] = { {width,height,1} }
 
 // Create a note (37x21) plus 1 pixel of padding on all sides
 TempPicturePtr(object, 39, 23);
