@@ -22,7 +22,9 @@ const char* username = "silva48";
 #include <math.h> 
 #include <stdio.h>
 #include "lcd.h"
+#include "dma.c"
 #define FIFOSIZE 16
+//#define MAX_Y_coordinate 2000
 char serfifo[FIFOSIZE];
 int seroffset = 0;
 
@@ -226,6 +228,15 @@ void USART3_8_IRQHandler(void) {
     }
 }
 
+void display_note(const Picture *pic, uint16_t x, uint16_t y){
+    for(int i = y; i <= lcddev.height; i= i+ 1){
+        LCD_DrawPicture(x, i, pic);
+        for(int y = 0; y<=1000000; y = y+1);
+        LCD_DrawPicture(0, 0, &background);
+
+    }
+}
+
 #ifdef SHELL
 #include "commands.h"
 void init_spi1_slow(){
@@ -233,13 +244,21 @@ void init_spi1_slow(){
     GPIOB->MODER &= ~(GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
     GPIOB->MODER |=  (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1);
     GPIOB->AFR[0] &=  ~(GPIO_AFRL_AFRL3 | GPIO_AFRL_AFRL5| GPIO_AFRL_AFRL4);
+
+    // Enable SPI1 and DMA1 clocks
     RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+    RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+
     SPI1->CR1 &= ~(SPI_CR1_SPE);
     SPI1->CR1 |= 0x0038;
     SPI1->CR1 |= (SPI_CR1_MSTR);
     SPI1->CR2 |= (SPI_CR2_DS_0|SPI_CR2_DS_1|SPI_CR2_DS_2|SPI_CR2_DS_3);
     SPI1->CR2 &= ~(SPI_CR2_DS_3);  
     SPI1->CR1 |= (SPI_CR1_SSM | SPI_CR1_SSI);
+
+    // Enable DMA requests for SPI1
+    SPI1->CR2 |= SPI_CR2_TXDMAEN;
+
     SPI1->CR2 |= SPI_CR2_FRXTH;
     SPI1->CR1 |= SPI_CR1_SPE;
 
@@ -294,18 +313,40 @@ int main() {
 
     LCD_Setup();
     LCD_DrawPicture(0, 0, &background);
+    while(1){
+        display_note(&red_note, lcddev.width/2, lcddev.height/2);   
+    }
 
     // Diego:
     // Process for drawing a picture will be to call pic_subset to sample background
     // then pic_overlay to overlay the note object on top of it
     // then LCD_DrawPicture to push it to the display
+    //int x = 100; 
+    //int y = 100;
+    //TempPicturePtr(tmp, 39, 23);
 
-    command_shell();
-    init_spi1_slow();
-    enable_sdcard();
+    //for (int i = 0; ic29*29; i++)
+    //    object->pix2[i] = 0xffff;
+
+    // Center the 19x19 ball into center of the 29x29 object.
+    // Now, the 19x19 ball has 5-pixel white borders in all directions.
+    //pic_overlay(object,5,5,&ball,0xffff);
+
+
+
+    #ifdef NOTE_TEST
+    pic_subset(tmp, &background, x-tmp->width/2, y-tmp->height/2); // Copy the background
+    pic_overlay(tmp, 0,0, object, 0xffff); // Overlay the object
+    LCD_DrawPicture(x - tmp->width/2, y - tmp->height/2, tmp); // Draw the picture
+    #endif
+
+
+    //command_shell();
+    //init_spi1_slow();
+    //enable_sdcard();
     //disable_sdcard();
-    init_sdcard_io();
-    sdcard_io_high_speed();
+    //init_sdcard_io();
+    //sdcard_io_high_speed();
 }
 #endif
 

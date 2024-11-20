@@ -26,7 +26,7 @@ for x in range(0, width):
 
         # Define string positions first (we'll need these for fret boundaries)
         string_positions = [50, width//2, width-50]  # Left, middle, and right strings
-        string_thickness = 3  # Increased thickness
+        string_thickness = 2  # Increased thickness
         
         # Draw three vertical lines (strings)
         for string_x in string_positions:
@@ -41,9 +41,10 @@ for x in range(0, width):
                 arr[x][y] = white
                 img_arr[y, x] = white_rgb
 
-#img = Image.fromarray(img_arr)
-#img.save('python/background.jpg')
+img = Image.fromarray(img_arr)
+img.save('python/background.png')
 
+"""
 out = open('src/{name}.c','w')
 
 # Print out the header
@@ -64,3 +65,4 @@ for y in range(0, height):
   out.write('"\n')
 
 out.write("};\n")
+"""
