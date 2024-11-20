@@ -299,6 +299,7 @@ void LCD_Init(void (*reset)(int), void (*select)(int), void (*reg_select)(int))
     LCD_WR_DATA(0x48);
     LCD_WR_REG(0x3A);
     LCD_WR_DATA(0x55);
+    // LCD_WR_DATA(0x53);    // Change from 0x55 to 0x53 for 8-bit color format
     LCD_WR_REG(0xB1);
     LCD_WR_DATA(0x00);
     LCD_WR_DATA(0x1B);   // 1A
@@ -366,7 +367,7 @@ __attribute((weak)) void init_lcd_spi(void)
 }
 
 void LCD_Setup() {
-    init_lcd_spi(); // Does this need to be created? 
+    init_lcd_spi();
     tft_select(0);
     tft_reset(0);
     tft_reg_select(0);
