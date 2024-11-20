@@ -293,24 +293,61 @@ void init_lcd_spi(){
     sdcard_io_high_speed();
 }
 
+void init_tim2(void) {
+    // Enable the RCC clock for TIM2.
+    RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 
+        // Set the Prescaler (PSC) and Auto-Reload Register (ARR) to achieve 30 fps
+    TIM2->PSC = 48000 - 1;  // Prescaler to divide 48 MHz to 1 kHz
+    TIM2->ARR = 5 - 1;     // Auto-reload to achieve 30 Hz (1 kHz / 30)
 
+    // Enable the UIE bit in the DIER to enable the UIE flag
+    // This will enable an update interrupt to occur each time the free-running counter of the timer reaches the ARR value and starts back at zero.
+    TIM2->DIER |= TIM_DIER_UIE;
+
+    // Enable the interrupt for Timer 2 in the NVIC ISER.
+    NVIC->ISER[0] |= 1 << TIM2_IRQn;
+
+    // Enable Timer 2
+    TIM2->CR1 |= TIM_CR1_CEN;
+}
+
+int x_temp;
+int y_temp;
+
+TempPicturePtr(note, 39, 23);
+
+void TIM2_IRQHandler() {
+    TIM2->SR &= ~TIM_SR_UIF;
+
+    TempPicturePtr(tmp, 39, 23);
+    pic_subset(tmp, &background, x_temp, y_temp - tmp->height/2); // Copy the background
+    pic_overlay(tmp, 0,0, note, 0x0); // Overlay the object
+    LCD_DrawPicture(x_temp , y_temp - tmp->height/2, tmp); // Draw the picture
+
+    y_temp++;
+    if (y_temp > background.height + red_note.height + 1) y_temp = 0;
+}
 
 int main() {
     internal_clock();
     init_usart5();
     enable_tty_interrupt();
-    setup_dma5();
 
     setbuf(stdin,0);
     setbuf(stdout,0);
     setbuf(stderr,0);
+
+    pic_overlay(note,1,1,&red_note,0xffff);
 
     LCD_Setup();
     LCD_DrawPicture(0, 0, &background);
     // while(1){
     //     display_note(&red_note, lcddev.width/2, lcddev.height/2);   
     // }
+    y_temp = 0;
+    x_temp = lcddev.width/2 - red_note.width/2;
+    init_tim2();
 
     // Diego:
     // Process for drawing a picture will be to call pic_subset to sample background
