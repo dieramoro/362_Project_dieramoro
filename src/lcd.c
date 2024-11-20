@@ -179,7 +179,7 @@ void LCD_WriteData16_End()
 }
 #endif /* not SLOW_SPI */
 
-#define BIT_8_TEST
+//#define BIT_8_TEST
 #ifdef BIT_8_TEST
 // Prepare to write 8-bit data to the LCD
 void LCD_WriteData8_Prepare()
