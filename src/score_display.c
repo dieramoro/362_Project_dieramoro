@@ -1,23 +1,16 @@
 #include "stm32f0xx.h"
 #include <stdint.h>
+#include "score_display.h"
 
 // Global Variables
-extern volatile int score; // The global score variable, updated elsewhere.
 static uint16_t display_buffer[8] = {0}; // Buffer for the 7-segment display.
 
-// Function Prototypes
-void init_score_display(void);
-void drive_score_display(void);
-void update_display_buffer(void);
-uint16_t digit_to_segment(int digit);
-void small_delay(void);
-void bb_write_halfword(int halfword);
-void bb_write_bit(int val);
 
 //===========================================================================
 // Initialize GPIO and peripherals for the display.
 //===========================================================================
-void init_score_display(void) {
+void init_score_display(void)
+{
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN; // Enable GPIOB clock.
 
     // Set PB12, PB13, and PB15 to general purpose output mode (01).
@@ -25,19 +18,22 @@ void init_score_display(void) {
     GPIOB->MODER |= 0x45000000; // Configure as outputs.
 
     // Set initial states.
-    GPIOB->BSRR = GPIO_BSRR_BS_12;  // Set PB12 high (CS).
-    GPIOB->BSRR = GPIO_BSRR_BR_13;  // Set PB13 low (SCK).
-    GPIOB->BSRR = GPIO_BSRR_BS_15;  // Set PB15 high (SDI).
+    GPIOB->BSRR = GPIO_BSRR_BS_12; // Set PB12 high (CS).
+    GPIOB->BSRR = GPIO_BSRR_BR_13; // Set PB13 low (SCK).
+    GPIOB->BSRR = GPIO_BSRR_BS_15; // Set PB15 high (SDI).
 }
 
 //===========================================================================
 // Continuously update the display with the current score.
 //===========================================================================
-void drive_score_display(void) {
-    while (1) {
+void drive_score_display(void)
+{
+    while (1)
+    {
         update_display_buffer(); // Update display buffer with the current score.
 
-        for (int d = 0; d < 8; d++) {
+        for (int d = 0; d < 8; d++)
+        {
             bb_write_halfword(display_buffer[d]); // Write each digit to the display.
             small_delay();
         }
@@ -47,13 +43,18 @@ void drive_score_display(void) {
 //===========================================================================
 // Update the display buffer to match the current score.
 //===========================================================================
-void update_display_buffer(void) {
+void update_display_buffer(void)
+{
     int temp_score = score; // Copy the current score.
-    for (int i = 7; i >= 0; i--) {
-        if (temp_score > 0) {
+    for (int i = 7; i >= 0; i--)
+    {
+        if (temp_score > 0)
+        {
             display_buffer[i] = digit_to_segment(temp_score % 10); // Convert digit to segment encoding.
             temp_score /= 10;
-        } else {
+        }
+        else
+        {
             display_buffer[i] = 0; // Blank out unused digits.
         }
     }
@@ -62,7 +63,8 @@ void update_display_buffer(void) {
 //===========================================================================
 // Map a digit (0-9) to its corresponding 7-segment encoding.
 //===========================================================================
-uint16_t digit_to_segment(int digit) {
+uint16_t digit_to_segment(int digit)
+{
     static const uint16_t segment_map[10] = {
         0b00111111, // 0
         0b00000110, // 1
@@ -81,10 +83,12 @@ uint16_t digit_to_segment(int digit) {
 //===========================================================================
 // Write a 16-bit halfword to the display using bit-banging.
 //===========================================================================
-void bb_write_halfword(int halfword) {
+void bb_write_halfword(int halfword)
+{
     GPIOB->BSRR = GPIO_BSRR_BR_12; // Set PB12 low (CS).
 
-    for (int i = 15; i >= 0; i--) {
+    for (int i = 15; i >= 0; i--)
+    {
         bb_write_bit((halfword >> i) & 0x1); // Write each bit.
     }
 
@@ -94,22 +98,27 @@ void bb_write_halfword(int halfword) {
 //===========================================================================
 // Write a single bit to the display using bit-banging.
 //===========================================================================
-void bb_write_bit(int val) {
-    if (val) {
+void bb_write_bit(int val)
+{
+    if (val)
+    {
         GPIOB->BSRR = GPIO_BSRR_BS_15; // Set SDI high.
-    } else {
+    }
+    else
+    {
         GPIOB->BSRR = GPIO_BSRR_BR_15; // Set SDI low.
     }
 
     small_delay();
-    GPIOB->BSRR = GPIO_BSRR_BS_13;  // Set SCK high.
+    GPIOB->BSRR = GPIO_BSRR_BS_13; // Set SCK high.
     small_delay();
-    GPIOB->BSRR = GPIO_BSRR_BR_13;  // Set SCK low.
+    GPIOB->BSRR = GPIO_BSRR_BR_13; // Set SCK low.
 }
 
 //===========================================================================
 // A small delay for timing purposes.
 //===========================================================================
-void small_delay(void) {
+void small_delay(void)
+{
     nano_wait(50000);
 }

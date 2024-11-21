@@ -188,8 +188,11 @@ void init_tim2(void) {
     TIM2->CR1 |= TIM_CR1_CEN;
 }
 
+int x_temp;
+int y_temp;
 int note_x_coord;
 int note_y_coord;
+
 
 // note object
 TempPicturePtr(note, 39, 23);
@@ -277,8 +280,9 @@ void TIM3_IRQHandler(void) {
 
     int data = ADC1->DR;
 
-    if (data > 2) GPIOC->ODR |= GPIO_MODER_MODER0;
-    else GPIOC->ODR |= GPIO_MODER_MODER2;
+    if (data > 2) GPIOC->BSRR |= GPIO_BSRR_BS_0;
+    else GPIOC->ODR |= GPIO_BSRR_BS_2;
+
     
 
 
@@ -297,8 +301,9 @@ void init_tim3(void) {
     
     TIM3->CR1 |= TIM_CR1_CEN;
     // NVIC_SetPriority(TIM2_IRQn, 3);
-
 }
+
+
 
 
 int main() {

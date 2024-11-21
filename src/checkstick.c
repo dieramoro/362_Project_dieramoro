@@ -1,7 +1,6 @@
-#include "stm32f0xx.h"
-#include <stdint.h>
+#include "checkstick.h"
 
-int read_rows()
+int read_buttons()
 {
     return (~GPIOC->IDR) & 0x8; // reads our 3 input buttons
     // right now have it as PC0,1,2
@@ -40,11 +39,37 @@ void init_exti(){
 }
 
 // occurs at PB0 rising edge
-void EXTI0_1_IRQHandler(){
+void EXTI0_IRQHandler(void) {
+    EXTI->PR = EXTI_PR_PR0;  // Clear interrupt flag for PC0 (upstrum)
 
-  EXTI->PR = EXTI_PR_PR0; // clear interrupt flag 
-  // logic for strum up
+    int buttonInput = GPIOA->IDR & ((1 << 3) | (1 << 4) | (1 << 5));  // Read buttons PA3, PA4, PA5
+
+    int notesInRange = 0;  // Counter for notes in range
+    for (int i = 0; i < len(track); i++) {
+        if (track[i].played == 1) {
+            continue;  // Skip already played notes
+        }
+
+        // Check if the note's vertical position is within range
+        if (track[i].vertical_position >= 290 && track[i].vertical_position <= 310) {
+            notesInRange++;
+
+            // Check if the note's up/down attribute matches the upstrum (1)
+            if (track[i].up_down == 1) {
+                // Check if the player's input matches the note's string value
+                if (track[i].string & buttonInput) {
+                    score++;                // Increment the score
+                    track[i].played = 1;   // Mark the note as played
+                }
+            }
+        }
+    }
+
+    if (notesInRange == 0) {
+        score--;  // Decrement score if no notes in range
+    }
 }
+
 
 void EXTI2_3_IRQHandler(){
 
