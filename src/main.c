@@ -435,17 +435,20 @@ void init_tim3(void) {
     NVIC_SetPriority(TIM2_IRQn, 3);
 }
 
+int32_t readpin(int32_t pin_num) {
+  int32_t num = 0;
+  num = GPIOB->IDR;
+
+  num = num << (0xf - pin_num);
+  num = num >>(0xf);
+  return (num);
+  
+}
+
+
 int main() {
 
     internal_clock();
-    msg[0] |= font[1];
-    //msg[1] |= font['C'];
-    //msg[2] |= font['E'];
-    //msg[3] |= font['L'];
-    //msg[4] |= font['A'];
-    //msg[5] |= font['S'];
-    //msg[6] |= font['S'];
-    //msg[7] |= font['T'];
 
     LCD_Setup();
     // displayStartMessage(0,0,0xFFFF, 0x0000, 12, 0);
