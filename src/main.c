@@ -214,12 +214,11 @@ TempPicturePtr(canvas, 29, 31);
 #define x_offset 14 // canvas width/2
 #define y_offset 15 // canvas height/2
 
-
 void TIM2_IRQHandler() {
     // Acknowledge the interrupt
     TIM2->SR &= ~TIM_SR_UIF;
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 20; i++) {
 
         note * current_note = &Track[i];
 
@@ -246,14 +245,6 @@ void TIM2_IRQHandler() {
 
         // Move the note down the screen
         current_note->position += 1;
-    
-
-        // Copy the background to canvas
-        pic_subset(canvas, &background, current_note->string, current_note->position);
-        // Overlay the object with black (0x0) set to transparent w/ 1 px padding
-        pic_overlay(canvas, 0, 1, &red_note, 0x0);
-        // Draw the canvas
-        LCD_DrawPictureDMA(current_note->string, current_note->position, canvas);
         
     }
 
@@ -357,7 +348,7 @@ void setup_adc(void) {
     // ADC1->CFGR2 &= ~ADC_CFGR2_CKMODE;
 }
 
-#define BCSIZE 16
+#define BCSIZE 6
 int bcsum = 0;
 int boxcar[BCSIZE];
 int bcn = 0;
