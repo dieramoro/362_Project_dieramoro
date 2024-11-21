@@ -194,7 +194,7 @@ void init_tim2(void) {
 
     // Set the Prescaler (PSC) and Auto-Reload Register (ARR) to achieve 30 fps
     TIM2->PSC = 480 - 1;  // Prescaler to divide 48 MHz to 1 kHz
-    TIM2->ARR = 500 - 1;
+    TIM2->ARR = 600 - 1;
 
     // Enable the UIE bit in the DIER to enable the UIE flag
     // This will enable an update interrupt to occur each time the free-running counter of the timer reaches the ARR value and starts back at zero.
@@ -218,11 +218,11 @@ void TIM2_IRQHandler() {
     // Acknowledge the interrupt
     TIM2->SR &= ~TIM_SR_UIF;
 
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 100; i++) {
 
         note * current_note = &Track[i];
 
-        if (current_note->position + y_offset >= 0 && current_note->position - y_offset <= 320) {
+        if (current_note->position + y_offset >= 0 && current_note->position - y_offset <= 320 && !current_note->played) {
             // draw_pos are upper left corners of canvas
             int x_draw_pos = current_note->string - x_offset;
             int y_draw_pos = current_note->position - y_offset;
@@ -355,9 +355,18 @@ int bcn = 0;
 int score_count = 0;
 int score_reset = 0;
 
+note * note_pointer = &Track[0];
+#define THRESHOLD 14
+#define Y_CENTER 287
+
 void TIM3_IRQHandler(void) {
 
-    TIM3->SR &= ~TIM_SR_UIF;  
+    TIM3->SR &= ~TIM_SR_UIF;
+
+    while (note_pointer->position > (Y_CENTER + THRESHOLD)) {
+        //note_pointer->played = 1;
+        note_pointer++;
+    }
     
     ADC1->CR |= ADC_CR_ADSTART;
     // Wait for EOC bit
@@ -376,15 +385,27 @@ void TIM3_IRQHandler(void) {
     if ((vol > 3500) && (score_reset == 0)){
         // GPIOC->BSRR = GPIO_BSRR_BS_0;
         score_reset = 1;
-        score_count++;
-        msg[0] = font[score_count];
+        // score_count++;
+        // msg[0] = font[score_count];
+
+        if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played && note_pointer->dir == UP_NOTE) {
+            // CHECK BUTTONS
+            note_pointer->played = 1;
+            // INCREASE SCORE LATER
+        }
 
     } 
     else if(vol < 1000 && (score_reset == 0)){
         // GPIOC->BSRR = GPIO_BSRR_BS_0;
         score_reset = 1;
-        score_count--;
-        msg[0] = font[score_count];
+        // score_count--;
+        // msg[0] = font[score_count];
+
+        if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played && note_pointer->dir == DOwN_NOTE) {
+            // CHECK BUTTONS
+            note_pointer->played = 1;
+            // INCREASE SCORE LATER
+        }
 
     } 
     else if (vol < 3500 && vol > 1000) {
@@ -426,10 +447,6 @@ int main() {
     //msg[6] |= font['S'];
     //msg[7] |= font['T'];
 
-
-    // Put red_note into note object w/ 1 px of padding
-    //pic_overlay(note, 1, 1, &red_note, 0xffff);
-
     LCD_Setup();
     // displayStartMessage(0,0,0xFFFF, 0x0000, 12, 0);
     init_spi2();
@@ -444,9 +461,6 @@ int main() {
     enable_ports();
     setup_adc();
     init_tim3();
-    // while(1){
-    //     display_note(&red_note, lcddev.width/2, lcddev.height/2);   
-    // }
 
     init_tim2();
 }
