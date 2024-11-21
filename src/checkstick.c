@@ -39,6 +39,7 @@ void init_exti(){
 }
 
 // occurs at PB0 rising edge
+/*
 void EXTI0_IRQHandler(void) {
     EXTI->PR = EXTI_PR_PR0;  // Clear interrupt flag for PC0 (upstrum)
 
@@ -69,6 +70,7 @@ void EXTI0_IRQHandler(void) {
         score--;  // Decrement score if no notes in range
     }
 }
+*/
 
 
 void EXTI2_3_IRQHandler(){

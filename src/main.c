@@ -219,7 +219,6 @@ void displayStartMessage(u16 x, u16 y, u16 fc, u16 bg, u8 size, u8 mode) {
 }
 
 void enable_ports(){
-void enable_ports(){
 
     RCC->AHBENR |= (RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOCEN);
     GPIOA->MODER |= (GPIO_MODER_MODER1);

@@ -1,6 +1,7 @@
 #include "stm32f0xx.h"
 #include <stdint.h>
 #include "score_display.h"
+#include "checkstick.h"
 
 // Global Variables
 static uint16_t display_buffer[8] = {0}; // Buffer for the 7-segment display.
