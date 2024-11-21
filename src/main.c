@@ -27,6 +27,10 @@ const char* username = "silva48";
 char serfifo[FIFOSIZE];
 int seroffset = 0;
 
+#define MIDDLE_POS 101
+#define LEFT_POS 32
+#define RIGHT_POS 171
+
 // This C macro will create an array of Picture elements.
 // Really, you'll just use it as a pointer to a single Picture
 // element with an internal pix2[] array large enough to hold
@@ -37,14 +41,14 @@ int seroffset = 0;
 // Diego: updated to use 1 byte per pixel 
 // IMAGES STILL NEED TO BE UPDATED
 // Can these be created dynamically for multiple notes?
-#define TempPicturePtr(name,width,height) Picture name[(width)*(height)/6+2] = { {width,height,1} }
+#define TempPicturePtr(name,width,height) Picture name[(width)*(height)/6+2] = { {width,height,2} }
 
 // Create a note (37x21) plus 1 pixel of padding on all sides
 TempPicturePtr(object, 39, 23);
 
 // These can possibly be compressed further using 8 bit color and RLE compression
 extern const Picture background;
-extern const Picture red_note; // NEEDS TO BE TESTED
+extern const Picture red_note;
 
 // Copy a subset of a large source picture into a smaller destination
 // sx,sy are the offset into the source picture.
@@ -96,136 +100,9 @@ void pic_overlay(Picture *dst, int xoffset, int yoffset, const Picture *src, int
 
 
 void internal_clock();
-////////////DAC START//////////////////////
-void setup_dac(void) {
-    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
-    GPIOA->MODER &= 0xfffffcff;
-    GPIOA->MODER |= 0x00000300;
-    RCC->APB1ENR |= RCC_APB1ENR_DACEN;
-    DAC->CR &= ~0x38; 
-    DAC->CR |= DAC_CR_TEN1;
-    DAC->CR |= DAC_CR_EN1;
-
-}
-
-//============================================================================
-// Timer 6 ISR
-//============================================================================
-// Write the Timer 6 ISR here.  Be sure to give it the right name.
-void TIM6_DAC_IRQHandler(){
-  TIM6->SR &= ~TIM_SR_UIF;
-  //int samp = wavetable[offset0>>16] + wavetable[offset1>>16];
-  //samp *= volume;
-  //samp = samp >> 17; 
-  //samp += 2048;
-  //DAC->DHR12R1 = samp;
-  
-}
-
-//============================================================================
-// init_tim6()
-//============================================================================
-void init_tim6(void) {
-    RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
-    //TIM6->PSC = (480000/RATE)-1;
-    TIM6->ARR = 100-1;
-    TIM6->DIER |= TIM_DIER_UIE;
-    NVIC->ISER[0] |= 1 << TIM6_IRQn;
-    TIM6->CR1 |= TIM_CR1_CEN;
-    TIM6->CR2 |= 0x20;
-
-}
-
-////////////DAC END/////////////////////////
 
 // Uncomment only one of the following to test each step
 #define SHELL
-
-void init_usart5() {
-    // TODO
-    RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
-    RCC->AHBENR |= RCC_AHBENR_GPIODEN;
-    GPIOC->MODER &= ~(GPIO_MODER_MODER12);
-    GPIOC->MODER |=  GPIO_MODER_MODER12_1;
-    GPIOC->AFR[1] &= 0xfff0ffff;
-    GPIOC->AFR[1] |= 0x00020000;
-    GPIOD->MODER &= ~(GPIO_MODER_MODER2);
-    GPIOD->MODER |=  GPIO_MODER_MODER2_1;
-    GPIOD->AFR[0] &= 0xfffff0ff;
-    GPIOD->AFR[0] |= 0x00000200;
-    RCC->APB1ENR |= 0x00100000;
-    USART5->CR1  &= ~(USART_CR1_UE | USART_CR1_M1| USART_CR1_M0| USART_CR1_OVER8| USART_CR1_PCE);
-    USART5->CR2 &= ~(USART_CR2_STOP);
-    USART5->BRR = 0x1a1;
-    USART5->CR1 |= USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
-
-    while(!((USART5->ISR & USART_ISR_TEACK) && (USART5->ISR & USART_ISR_REACK))){
-
-    }   
-}
-
-
-void enable_tty_interrupt(void) {
-    // TODO
-    USART5->CR1 |= USART_CR1_RXNEIE;
-    NVIC->ISER[0] |= 1<< 29;
-    USART5->CR3 |= USART_CR3_DMAR;
-    RCC->AHBENR |= RCC_AHBENR_DMA2EN;
-    DMA2->CSELR |= DMA2_CSELR_CH2_USART5_RX;
-    DMA2_Channel2->CCR &= ~DMA_CCR_EN;
-
-    DMA2_Channel2->CMAR = (uint32_t) serfifo;
-    DMA2_Channel2->CPAR = (uint32_t) &USART5->RDR;
-    DMA2_Channel2->CNDTR = FIFOSIZE;
-    DMA2_Channel2->CCR &= ~DMA_CCR_DIR;
-    DMA2_Channel2->CCR |= DMA_CCR_MINC;
-    
-    DMA2_Channel2->CCR &= ~DMA_CCR_MSIZE;
-    DMA2_Channel2->CCR &= ~DMA_CCR_PSIZE;
-    DMA2_Channel2->CCR |= DMA_CCR_CIRC;
-    DMA2_Channel2->CCR |= DMA_CCR_PL;
-    DMA2_Channel2->CCR |= DMA_CCR_EN;
-}
-
-// Works like line_buffer_getchar(), but does not check or clear ORE nor wait on new characters in USART
-char interrupt_getchar() {
-
-    while(fifo_newline(&input_fifo) == 0) {
-        asm volatile ("wfi");
-    }
-    // Return a character from the line buffer.
-    char ch = fifo_remove(&input_fifo);
-    return ch;
-    // TODO
-}
-int __io_getchar(void) {
-    // TODO Use interrupt_getchar() instead of line_buffer_getchar()
-    int out;
-    //out = line_buffer_getchar();
-    out = interrupt_getchar();
-    return out;
-}
-int __io_putchar(int c) {
-    int temp = '\r';
-    if(c == '\n'){
-
-        while(!(USART5->ISR & USART_ISR_TXE));
-        USART5->TDR = temp;
-    }
-    while(!(USART5->ISR & USART_ISR_TXE));
-    USART5->TDR = c;
-    return c;
-
-} 
-
-
-void USART3_8_IRQHandler(void) {
-    while(DMA2_Channel2->CNDTR != sizeof serfifo - seroffset) {
-        if (!fifo_full(&input_fifo))
-            insert_echo_char(serfifo[seroffset]);
-        seroffset = (seroffset + 1) % sizeof serfifo;
-    }
-}
 
 void display_note(const Picture *pic, uint16_t x, uint16_t y){
     for(int i = y; i <= lcddev.height; i= i+ 1){
@@ -255,7 +132,6 @@ void init_spi1_slow(){
     SPI1->CR1 |= (SPI_CR1_SSM | SPI_CR1_SSI);
     SPI1->CR2 |= SPI_CR2_FRXTH;
     SPI1->CR1 |= SPI_CR1_SPE;
-
 }
 
 
@@ -297,9 +173,9 @@ void init_tim2(void) {
     // Enable the RCC clock for TIM2.
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 
-        // Set the Prescaler (PSC) and Auto-Reload Register (ARR) to achieve 30 fps
+    // Set the Prescaler (PSC) and Auto-Reload Register (ARR) to achieve 30 fps
     TIM2->PSC = 48000 - 1;  // Prescaler to divide 48 MHz to 1 kHz
-    TIM2->ARR = 5 - 1;     // Auto-reload to achieve 30 Hz (1 kHz / 30)
+    TIM2->ARR = 8 - 1;
 
     // Enable the UIE bit in the DIER to enable the UIE flag
     // This will enable an update interrupt to occur each time the free-running counter of the timer reaches the ARR value and starts back at zero.
@@ -312,74 +188,48 @@ void init_tim2(void) {
     TIM2->CR1 |= TIM_CR1_CEN;
 }
 
-int x_temp;
-int y_temp;
+int note_x_coord;
+int note_y_coord;
 
+// note object
 TempPicturePtr(note, 39, 23);
 
 void TIM2_IRQHandler() {
+    // Acknowledge the interrupt
     TIM2->SR &= ~TIM_SR_UIF;
 
-    TempPicturePtr(tmp, 39, 23);
-    pic_subset(tmp, &background, x_temp, y_temp - tmp->height/2); // Copy the background
-    pic_overlay(tmp, 0,0, note, 0x0); // Overlay the object
-    LCD_DrawPicture(x_temp , y_temp - tmp->height/2, tmp); // Draw the picture
+    TempPicturePtr(canvas, 39, 23); // create a canvas
 
-    y_temp++;
-    if (y_temp > background.height + red_note.height + 1) y_temp = 0;
+    pic_subset(canvas, &background, note_x_coord, note_y_coord); // Copy the background to cavnas
+    pic_overlay(canvas, 0,0, note, 0x0); // Overlay the object with black (0x0) set to transparent
+    LCD_DrawPicture(note_x_coord , note_y_coord, canvas); // Draw the canvas
+
+    note_y_coord++;
+    if (note_y_coord > background.height) {
+        note_y_coord = 0;
+        if (note_x_coord == MIDDLE_POS) {
+            note_x_coord = RIGHT_POS;
+        } else if (note_x_coord == RIGHT_POS) {
+           note_x_coord = LEFT_POS; 
+        } else if (note_x_coord == LEFT_POS) {
+            note_x_coord = MIDDLE_POS; 
+        }
+    }
 }
 
 int main() {
+
     internal_clock();
-    init_usart5();
-    enable_tty_interrupt();
 
-    setbuf(stdin,0);
-    setbuf(stdout,0);
-    setbuf(stderr,0);
-
-    pic_overlay(note,1,1,&red_note,0xffff);
+    // Put red_note into note object w/ 1 px of padding
+    pic_overlay(note, 1, 1, &red_note, 0xffff);
 
     LCD_Setup();
+    // Draw the background
     LCD_DrawPicture(0, 0, &background);
-    // while(1){
-    //     display_note(&red_note, lcddev.width/2, lcddev.height/2);   
-    // }
-    y_temp = 0;
-    x_temp = lcddev.width/2 - red_note.width/2;
+
+    note_y_coord = 0;
+    note_x_coord = MIDDLE_POS;
     init_tim2();
-
-    // Diego:
-    // Process for drawing a picture will be to call pic_subset to sample background
-    // then pic_overlay to overlay the note object on top of it
-    // then LCD_DrawPicture to push it to the display
-    //int x = 100; 
-    //int y = 100;
-    //TempPicturePtr(tmp, 39, 23);
-
-    //for (int i = 0; ic29*29; i++)
-    //    object->pix2[i] = 0xffff;
-
-    // Center the 19x19 ball into center of the 29x29 object.
-    // Now, the 19x19 ball has 5-pixel white borders in all directions.
-    //pic_overlay(object,5,5,&ball,0xffff);
-
-
-
-    #ifdef NOTE_TEST
-    pic_subset(tmp, &background, x-tmp->width/2, y-tmp->height/2); // Copy the background
-    pic_overlay(tmp, 0,0, object, 0xffff); // Overlay the object
-    LCD_DrawPicture(x - tmp->width/2, y - tmp->height/2, tmp); // Draw the picture
-    #endif
-
-
-    //command_shell();
-    //init_spi1_slow();
-    //enable_sdcard();
-    //disable_sdcard();
-    //init_sdcard_io();
-    //sdcard_io_high_speed();
 }
 #endif
-
-// TODO Remember to look up for the proper name of the ISR function
