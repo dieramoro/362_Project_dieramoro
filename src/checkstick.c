@@ -38,15 +38,17 @@ void init_exti(){
   
 }
 
-// occurs at PB0 rising edge
+// occurs at PC0 rising edge
 void EXTI0_IRQHandler(void) {
     EXTI->PR = EXTI_PR_PR0;  // Clear interrupt flag for PC0 (upstrum)
 
     int buttonInput = GPIOA->IDR & ((1 << 3) | (1 << 4) | (1 << 5));  // Read buttons PA3, PA4, PA5
 
     int notesInRange = 0;  // Counter for notes in range
-    for (int i = 0; i < len(track); i++) {
-        if (track[i].played == 1) {
+    for (int i = 0; i < num_notes; i++) { 
+        if (track[i].played == 1) { // if already played, skip over note (handle repeated strums for same note)
+            // if (i == num_notes - 1) { // last note is played
+            // }
             continue;  // Skip already played notes
         }
 
@@ -62,7 +64,7 @@ void EXTI0_IRQHandler(void) {
                     track[i].played = 1;   // Mark the note as played
                 }
             }
-        }
+        } // go to next note
     }
 
     if (notesInRange == 0) {

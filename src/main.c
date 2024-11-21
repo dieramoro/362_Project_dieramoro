@@ -246,6 +246,8 @@ void enable_ports(){
     GPIOC->MODER &= ~(0x33);
     GPIOC->MODER |= 0x11;
 
+    // input PA8,9,10
+
 }
 
 void setup_adc(void) {
@@ -299,8 +301,6 @@ void TIM3_IRQHandler(void) {
         GPIOC->BSRR = GPIO_BSRR_BR_0;
         GPIOC->BSRR = GPIO_BSRR_BR_2;
     }
-    
-
 
 }
 
@@ -318,9 +318,6 @@ void init_tim3(void) {
     TIM3->CR1 |= TIM_CR1_CEN;
     // NVIC_SetPriority(TIM2_IRQn, 3);
 }
-
-
-
 
 int main() {
 
