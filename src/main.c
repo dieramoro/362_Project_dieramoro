@@ -23,6 +23,7 @@ const char* username = "silva48";
 #include <stdio.h>
 #include "lcd.h"
 #include "track.h"
+#include "checkstick.h"
 #define FIFOSIZE 16
 //#define MAX_Y_coordinate 2000
 char serfifo[FIFOSIZE];
@@ -51,6 +52,12 @@ extern const Picture red_note;
 // Copy a subset of a large source picture into a smaller destination
 // sx,sy are the offset into the source picture.
 uint32_t vol = 0;
+
+const char font[] = {
+    // digits
+    0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x67
+};
+
 void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
 {
     int dw = dst->width;
@@ -177,6 +184,7 @@ void init_tim2(void) {
     // Enable Timer 2
     TIM2->CR1 |= TIM_CR1_CEN;
 }
+uint16_t msg[8] = { 0x0000,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700};
 
 
 void TIM2_IRQHandler() {
@@ -192,6 +200,7 @@ void TIM2_IRQHandler() {
 
         // Move the note down the screen
         current_note->position += 1;
+    
 
         // Copy the background to canvas
         pic_subset(canvas, &background, current_note->string, current_note->position);
@@ -216,6 +225,53 @@ void displayStartMessage(u16 x, u16 y, u16 fc, u16 bg, u8 size, u8 mode) {
     //     }
     // }
 
+}
+
+void init_spi2(void) {
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+    RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+    GPIOB->MODER &= ~(GPIO_MODER_MODER15| GPIO_MODER_MODER13| GPIO_MODER_MODER12);
+    GPIOB->MODER |= GPIO_MODER_MODER15_1| GPIO_MODER_MODER13_1| GPIO_MODER_MODER12_1;
+    GPIOB->AFR[1] &= 0x0f00ffff;
+    SPI2->CR1 &= ~(SPI_CR1_SPE);
+    SPI2->CR1 |= SPI_CR1_BR_0| SPI_CR1_BR_1 |SPI_CR1_BR_2;
+    SPI2->CR2 |= SPI_CR2_DS_0|SPI_CR2_DS_1|SPI_CR2_DS_2|SPI_CR2_DS_3;
+    SPI2->CR1 |= SPI_CR1_MSTR;
+    SPI2->CR2 |= SPI_CR2_NSSP | SPI_CR2_SSOE | SPI_CR2_TXDMAEN;
+    SPI2->CR1 |= SPI_CR1_SPE;
+
+}
+
+
+
+void spi2_setup_dma(void) {
+    SPI2->CR2 |= SPI_CR2_TXDMAEN;
+    RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+    DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+    DMA1_Channel5->CMAR = (uint32_t) &msg;
+    DMA1_Channel5->CPAR = (uint32_t) &SPI2->DR;
+    DMA1_Channel5->CNDTR = 8;
+    DMA1_Channel5->CCR |= DMA_CCR_DIR;
+    DMA1_Channel5->CCR |= DMA_CCR_MINC;
+
+    DMA1_Channel5->CCR |= DMA_CCR_MSIZE_0;
+    DMA1_Channel5->CCR |= DMA_CCR_PSIZE_0;
+    
+    DMA1_Channel5->CCR |= DMA_CCR_CIRC;
+    
+}
+
+void init_tim15(void) {
+    RCC->APB2ENR |= RCC_APB2ENR_TIM15EN;
+    TIM15->PSC = 4800-1;
+    TIM15->ARR = 100000-1;
+    TIM15->DIER |= TIM_DIER_UDE;
+    TIM15->CR1 |= TIM_CR1_CEN;
+
+}
+
+void spi2_enable_dma(void) {
+    DMA1_Channel5->CCR |= DMA_CCR_EN;
 }
 
 void enable_ports(){
@@ -255,15 +311,17 @@ void setup_adc(void) {
     // ADC1->CFGR2 &= ~ADC_CFGR2_CKMODE;
 }
 
-#define BCSIZE 32
+#define BCSIZE 16
 int bcsum = 0;
 int boxcar[BCSIZE];
 int bcn = 0;
+int score_count = 0;
+int score_reset = 0;
 
 void TIM3_IRQHandler(void) {
 
     TIM3->SR &= ~TIM_SR_UIF;  
-
+    
     ADC1->CR |= ADC_CR_ADSTART;
     // Wait for EOC bit
     while ((ADC1->ISR & ADC_ISR_EOC) == 0);
@@ -275,12 +333,29 @@ void TIM3_IRQHandler(void) {
         bcn = 0;
     }
     vol = bcsum / BCSIZE;
+    if((score_count == 10) || (score_count < 0)){
+        score_count = 0;
+    }
+    if ((vol > 3500) && (score_reset == 0)){
+        // GPIOC->BSRR = GPIO_BSRR_BS_0;
+        score_reset = 1;
+        score_count++;
+        msg[0] = font[score_count];
 
-    if (vol > 2000) GPIOC->BSRR = GPIO_BSRR_BS_0;
-    else if(vol < 1000) GPIOC->BSRR = GPIO_BSRR_BS_2;
-    else {
-        GPIOC->BSRR = GPIO_BSRR_BR_0;
-        GPIOC->BSRR = GPIO_BSRR_BR_2;
+    } 
+    else if(vol < 1000 && (score_reset == 0)){
+        // GPIOC->BSRR = GPIO_BSRR_BS_0;
+        score_reset = 1;
+        score_count--;
+        msg[0] = font[score_count];
+
+    } 
+    else if (vol < 3500 && vol > 1000) {
+    //     GPIOC->BSRR = GPIO_BSRR_BR_0;
+    //     GPIOC->BSRR = GPIO_BSRR_BR_2;
+        score_reset = 0;
+        msg[0] = font[score_count];
+
     }
 
 }
@@ -289,26 +364,41 @@ void init_tim3(void) {
     
     RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
 
+    // ADC Sample Rate
     TIM3->PSC = 480-1; // Trigger at 100 Hz
     TIM3->ARR = 1000-1;
 
     TIM3->DIER |= TIM_DIER_UIE;
 
     NVIC_EnableIRQ(TIM3_IRQn);
+    //NVIC_SetPriority(TIM3_IRQn, 0);
     
     TIM3->CR1 |= TIM_CR1_CEN;
-    // NVIC_SetPriority(TIM2_IRQn, 3);
+    NVIC_SetPriority(TIM2_IRQn, 3);
 }
 
 int main() {
 
     internal_clock();
+    msg[0] |= font[1];
+    //msg[1] |= font['C'];
+    //msg[2] |= font['E'];
+    //msg[3] |= font['L'];
+    //msg[4] |= font['A'];
+    //msg[5] |= font['S'];
+    //msg[6] |= font['S'];
+    //msg[7] |= font['T'];
+
 
     // Put red_note into note object w/ 1 px of padding
     //pic_overlay(note, 1, 1, &red_note, 0xffff);
 
     LCD_Setup();
     // displayStartMessage(0,0,0xFFFF, 0x0000, 12, 0);
+    init_spi2();
+    spi2_setup_dma();
+    spi2_enable_dma();
+    init_tim15();
 
     LCD_DMA_Init();
 
