@@ -52,6 +52,7 @@ extern const Picture red_note;
 
 // Copy a subset of a large source picture into a smaller destination
 // sx,sy are the offset into the source picture.
+uint32_t vol = 0;
 void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
 {
     int dw = dst->width;
@@ -190,6 +191,8 @@ void init_tim2(void) {
 
 int x_temp;
 int y_temp;
+int x_temp;
+int y_temp;
 int note_x_coord;
 int note_y_coord;
 
@@ -234,10 +237,10 @@ void displayStartMessage(u16 x, u16 y, u16 fc, u16 bg, u8 size, u8 mode) {
 
 }
 
-enable_ports(){
+void enable_ports(){
 
     RCC->AHBENR |= (RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOCEN);
-    GPIOA->MODER |= (GPIO_MODER_MODER6);
+    GPIOA->MODER |= (GPIO_MODER_MODER1);
 
     // outputs PC 0,2
     GPIOC->MODER &= ~(0x33);
@@ -251,7 +254,7 @@ void setup_adc(void) {
     RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 
     // Configure pin for ADC_IN6: PA6, output voltage
-    GPIOA->MODER |= 0x3000;
+   // GPIOA->MODER |= 0x3000;
 
     // Enable clock for ADC peripheral
     RCC->APB2ENR |= RCC_APB2ENR_ADCEN;
@@ -269,6 +272,10 @@ void setup_adc(void) {
     // ADC1->CFGR2 &= ~ADC_CFGR2_CKMODE;
 }
 
+#define BCSIZE 32
+int bcsum = 0;
+int boxcar[BCSIZE];
+int bcn = 0;
 
 void TIM3_IRQHandler(void) {
 
@@ -278,11 +285,20 @@ void TIM3_IRQHandler(void) {
     // Wait for EOC bit
     while ((ADC1->ISR & ADC_ISR_EOC) == 0);
 
-    int data = ADC1->DR;
+    bcsum -= boxcar[bcn];
+    bcsum += boxcar[bcn] = ADC1->DR;
+    bcn +=1;
+    if(bcn >= BCSIZE){
+        bcn = 0;
+    }
+    vol = bcsum / BCSIZE;
 
-    if (data > 2) GPIOC->BSRR |= GPIO_BSRR_BS_0;
-    else GPIOC->ODR |= GPIO_BSRR_BS_2;
-
+    if (vol > 2000) GPIOC->BSRR = GPIO_BSRR_BS_0;
+    else if(vol < 1000) GPIOC->BSRR = GPIO_BSRR_BS_2;
+    else {
+        GPIOC->BSRR = GPIO_BSRR_BR_0;
+        GPIOC->BSRR = GPIO_BSRR_BR_2;
+    }
     
 
 
@@ -292,7 +308,7 @@ void init_tim3(void) {
     
     RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
 
-    TIM3->PSC = 4800-1; // Trigger at 10 Hz
+    TIM3->PSC = 480-1; // Trigger at 100 Hz
     TIM3->ARR = 1000-1;
 
     TIM3->DIER |= TIM_DIER_UIE;
@@ -319,6 +335,9 @@ int main() {
 
     // Draw the background
     LCD_DrawPicture(0, 0, &background);
+    enable_ports();
+    setup_adc();
+    init_tim3();
     // while(1){
     //     display_note(&red_note, lcddev.width/2, lcddev.height/2);   
     // }
