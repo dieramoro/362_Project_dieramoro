@@ -993,11 +993,13 @@ void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
     int ys=0;
     int xe=pic->width;
     int ye=pic->height;
+    
     if (x0 < 0) {
         xs = -x0;
         x0 = 0;
     }
     if (y0 < 0) {
+        return; // temp, remove if needed
         ys = -y0;
         y0 = 0;
     }
@@ -1006,6 +1008,7 @@ void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
         x1 = lcddev.width - 1;
     }
     if (y1 >= lcddev.height) {
+        // return; // temp, remove if needed
         ye -= y1 - (lcddev.height - 1);
         y1 = lcddev.height - 1;
     }
@@ -1025,46 +1028,95 @@ void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
     lcddev.select(0);
 }
 
-#ifdef BIT_8_TEST
-void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic)
+// Configure DMA for SPI TX in circular mode
+void LCD_DMA_Init(void) {
+    // Enable DMA1 clock
+    RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+
+    // Disable channel first
+    DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+    
+    // Configure DMA1 Channel 3 (SPI1_TX)
+    DMA1_Channel3->CCR = 0; // Clear configuration
+    DMA1_Channel3->CCR |= DMA_CCR_CIRC     // Circular mode
+                       | DMA_CCR_DIR      // Memory to peripheral
+                       |  DMA_CCR_MINC     // Memory increment mode
+                       |  DMA_CCR_MSIZE_0  // 16-bit memory size
+                       |  DMA_CCR_PSIZE_0  // 16-bit peripheral size
+                       |  DMA_CCR_PL_0;    // Medium priority
+    
+    // Set peripheral address (SPI1 data register)
+    DMA1_Channel3->CPAR = (uint32_t)&(SPI1->DR);
+    
+    // Enable SPI TX DMA
+    SPI1->CR2 |= SPI_CR2_TXDMAEN;
+}
+
+// Start DMA transfer
+void LCD_DMA_Start(const uint16_t * data, uint32_t length) {
+    // Disable channel first
+    DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+    
+    // Set memory address and length
+    DMA1_Channel3->CMAR = (uint32_t) data;
+    DMA1_Channel3->CNDTR = length;
+    
+    // Enable DMA channel
+    DMA1_Channel3->CCR |= DMA_CCR_EN;
+}
+
+// Stop DMA transfer
+void LCD_DMA_Stop(void) {
+    // Disable DMA channel
+    DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+}
+
+void LCD_DrawPictureDMA(u16 x0, u16 y0, const Picture *pic)
 {
     int x1 = x0 + pic->width-1;
     int y1 = y0 + pic->height-1;
     if (x0 >= lcddev.width || y0 >= lcddev.height || x1 < 0 || y1 < 0)
         return; // Completely outside of screen.  Nothing to do.
+    
     lcddev.select(1);
-    int xs=0;
-    int ys=0;
-    int xe=pic->width;
-    int ye=pic->height;
-    if (x0 < 0) {
-        xs = -x0;
-        x0 = 0;
-    }
-    if (y0 < 0) {
-        ys = -y0;
-        y0 = 0;
-    }
-    if (x1 >= lcddev.width) {
-        xe -= x1 - (lcddev.width - 1);
-        x1 = lcddev.width - 1;
-    }
-    if (y1 >= lcddev.height) {
-        ye -= y1 - (lcddev.height - 1);
-        y1 = lcddev.height - 1;
-    }
+    int xs=0, ys=0;
+    int xe=pic->width, ye=pic->height;
+    
+    // Handle clipping
+    if (x0 < 0) { xs = -x0; x0 = 0; }
+    if (y0 < 0) { ys = -y0; y0 = 0; }
+    if (x1 >= lcddev.width) { xe -= x1 - (lcddev.width - 1); x1 = lcddev.width - 1; }
+    if (y1 >= lcddev.height) { ye -= y1 - (lcddev.height - 1); y1 = lcddev.height - 1; }
 
-    LCD_SetWindow(x0,y0,x1,y1);
-    LCD_WriteData8_Prepare();
+    LCD_SetWindow(x0, y0, x1, y1);
+    LCD_WriteData16_Prepare();
 
-    u8 *data = (u8 *)pic->pixel_data;
-    for(int y=ys; y<ye; y++) {
-        u8 *row = &data[y * pic->width + xs];
-        for(int x=xs; x<xe; x++)
-            LCD_WriteData8(*row++);
+    // Calculate total number of pixels to transfer
+    uint32_t total_pixels = (xe - xs) * (ye - ys);
+    
+    // Get pointer to start of data, accounting for clipping
+    u16 *data = (u16 *)pic->pixel_data + (ys * pic->width + xs);
+
+    // Wait for SPI to finish
+    while ((SPI1->SR & SPI_SR_TXE) == 0);
+    
+    // If image is contiguous in memory (no clipping on x-axis), send it all at once
+    if (xs == 0 && xe == pic->width) {
+        LCD_DMA_Start(data, total_pixels);
+        while((DMA1->ISR & DMA_ISR_TCIF3) == 0);
+        DMA1->IFCR = DMA_IFCR_CTCIF3;
+    } else {
+        // If image is clipped on x-axis, we still need to send row by row
+        int row_width = xe - xs;
+        for(int y = ys; y < ye; y++) {
+            LCD_DMA_Start(&data[y * pic->width], row_width);
+            while((DMA1->ISR & DMA_ISR_TCIF3) == 0);
+            DMA1->IFCR = DMA_IFCR_CTCIF3;
+        }
     }
+    
+    LCD_DMA_Stop();
 
-    LCD_WriteData8_End();
+    LCD_WriteData16_End();
     lcddev.select(0);
 }
-#endif

@@ -22,6 +22,7 @@ const char* username = "silva48";
 #include <math.h> 
 #include <stdio.h>
 #include "lcd.h"
+#include "track.h"
 #define FIFOSIZE 16
 //#define MAX_Y_coordinate 2000
 char serfifo[FIFOSIZE];
@@ -43,9 +44,6 @@ int seroffset = 0;
 // Can these be created dynamically for multiple notes?
 #define TempPicturePtr(name,width,height) Picture name[(width)*(height)/6+2] = { {width,height,2} }
 
-// Create a note (37x21) plus 1 pixel of padding on all sides
-TempPicturePtr(object, 39, 23);
-
 // These can possibly be compressed further using 8 bit color and RLE compression
 extern const Picture background;
 extern const Picture red_note;
@@ -59,7 +57,7 @@ void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
     int dh = dst->height;
     for(int y=0; y<dh; y++) {
         if (y+sy < 0)
-            continue;
+            break; // changed from continue
         if (y+sy >= src->height)
             break;
         for(int x=0; x<dw; x++) {
@@ -105,15 +103,6 @@ void internal_clock();
 // Uncomment only one of the following to test each step
 #define SHELL
 
-void display_note(const Picture *pic, uint16_t x, uint16_t y){
-    for(int i = y; i <= lcddev.height; i= i+ 1){
-        LCD_DrawPicture(x, i, pic);
-        for(int y = 0; y<=1000000; y = y+1);
-        LCD_DrawPicture(0, 0, &background);
-
-    }
-}
-
 #ifdef SHELL
 #include "commands.h"
 void init_spi1_slow(){
@@ -122,7 +111,7 @@ void init_spi1_slow(){
     GPIOB->MODER |=  (GPIO_MODER_MODER3_1 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1);
     GPIOB->AFR[0] &=  ~(GPIO_AFRL_AFRL3 | GPIO_AFRL_AFRL5| GPIO_AFRL_AFRL4);
 
-    // Enable SPI1 and DMA1 clocks
+    // Enable SPI1
     RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
     SPI1->CR1 &= ~(SPI_CR1_SPE);
@@ -175,8 +164,8 @@ void init_tim2(void) {
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 
     // Set the Prescaler (PSC) and Auto-Reload Register (ARR) to achieve 30 fps
-    TIM2->PSC = 48000 - 1;  // Prescaler to divide 48 MHz to 1 kHz
-    TIM2->ARR = 8 - 1;
+    TIM2->PSC = 480 - 1;  // Prescaler to divide 48 MHz to 1 kHz
+    TIM2->ARR = 500 - 1;
 
     // Enable the UIE bit in the DIER to enable the UIE flag
     // This will enable an update interrupt to occur each time the free-running counter of the timer reaches the ARR value and starts back at zero.
@@ -189,38 +178,30 @@ void init_tim2(void) {
     TIM2->CR1 |= TIM_CR1_CEN;
 }
 
-int x_temp;
-int y_temp;
-int x_temp;
-int y_temp;
-int note_x_coord;
-int note_y_coord;
-
-
-// note object
-TempPicturePtr(note, 39, 23);
 
 void TIM2_IRQHandler() {
     // Acknowledge the interrupt
     TIM2->SR &= ~TIM_SR_UIF;
 
-    TempPicturePtr(canvas, 39, 23); // create a canvas
+    // Create a canvas
+    TempPicturePtr(canvas, 39, 21);
 
-    pic_subset(canvas, &background, note_x_coord, note_y_coord); // Copy the background to cavnas
-    pic_overlay(canvas, 0,0, note, 0x0); // Overlay the object with black (0x0) set to transparent
-    LCD_DrawPicture(note_x_coord , note_y_coord, canvas); // Draw the canvas
+    for (int i = 0; i < 10; i++) {
 
-    note_y_coord++;
-    if (note_y_coord > background.height) {
-        note_y_coord = 0;
-        if (note_x_coord == MIDDLE_POS) {
-            note_x_coord = RIGHT_POS;
-        } else if (note_x_coord == RIGHT_POS) {
-           note_x_coord = LEFT_POS; 
-        } else if (note_x_coord == LEFT_POS) {
-            note_x_coord = MIDDLE_POS; 
-        }
+        note * current_note = &Track[i];
+
+        // Move the note down the screen
+        current_note->position += 1;
+
+        // Copy the background to canvas
+        pic_subset(canvas, &background, current_note->string, current_note->position);
+        // Overlay the object with black (0x0) set to transparent w/ 1 px padding
+        pic_overlay(canvas, 0, 1, &red_note, 0x0);
+        // Draw the canvas
+        LCD_DrawPictureDMA(current_note->string, current_note->position, canvas);
+        
     }
+
 }
 
 void displayStartMessage(u16 x, u16 y, u16 fc, u16 bg, u8 size, u8 mode) {
@@ -324,11 +305,12 @@ int main() {
     internal_clock();
 
     // Put red_note into note object w/ 1 px of padding
-    pic_overlay(note, 1, 1, &red_note, 0xffff);
+    //pic_overlay(note, 1, 1, &red_note, 0xffff);
 
     LCD_Setup();
-    displayStartMessage(0,0,0xFFFF, 0x0000, 12, 0);
+    // displayStartMessage(0,0,0xFFFF, 0x0000, 12, 0);
 
+    LCD_DMA_Init();
 
     // Draw the background
     LCD_DrawPicture(0, 0, &background);
@@ -338,12 +320,7 @@ int main() {
     // while(1){
     //     display_note(&red_note, lcddev.width/2, lcddev.height/2);   
     // }
-    y_temp = 0;
-    x_temp = lcddev.width/2 - red_note.width/2;
 
-
-    note_y_coord = 0;
-    note_x_coord = MIDDLE_POS;
     init_tim2();
 }
 #endif
