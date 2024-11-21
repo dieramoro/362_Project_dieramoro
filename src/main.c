@@ -329,6 +329,90 @@ void TIM2_IRQHandler() {
     if (y_temp > background.height + red_note.height + 1) y_temp = 0;
 }
 
+void displayStartMessage(u16 x, u16 y, u16 fc, u16 bg, u8 size, u8 mode) {
+    const char *message = "Press all three note buttons to start";
+    LCD_DrawString(x, y, fc, bg, message, size, mode);
+    // while (1) {
+    //     // Check the state of buttons (assumes buttons are active low)
+    //     if ((GPIOA->IDR & (1 << 0)) != 0 &&  // PA0 pressed
+    //         (GPIOA->IDR & (1 << 1)) != 0 &&  // PA1 pressed
+    //         (GPIOA->IDR & (1 << 2)) != 0) {  // PA2 pressed
+    //         break;  // Exit the loop when all buttons are pressed
+    //     }
+    // }
+
+}
+
+enable_ports(){
+
+    RCC->AHBENR |= (RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOCEN);
+    GPIOA->MODER |= (GPIO_MODER_MODER6);
+
+    // outputs PC 0,2
+    GPIOC->MODER &= ~(0x33);
+    GPIOC->MODER |= 0x11;
+
+}
+
+void setup_adc(void) {
+
+    // Enable clock to GPIOA
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+
+    // Configure pin for ADC_IN6: PA6, output voltage
+    GPIOA->MODER |= 0x3000;
+
+    // Enable clock for ADC peripheral
+    RCC->APB2ENR |= RCC_APB2ENR_ADCEN;
+
+    // Enable the High-Speed Internal (HSI14) clock, wait until its ready
+    RCC->CR2 |= RCC_CR2_HSI14ON;
+    while ((RCC->CR2 & RCC_CR2_HSI14RDY) == 0);
+
+    // Enable ADEN bit, wait until ready
+    ADC1->CR |= ADC_CR_ADEN;
+    while ((ADC1->ISR & ADC_ISR_ADRDY) == 0);
+
+    ADC1->CHSELR |= ADC_CHSELR_CHSEL1;
+    // while ((ADC1->ISR & ADC_ISR_ADRDY) == 0);
+    // ADC1->CFGR2 &= ~ADC_CFGR2_CKMODE;
+}
+
+
+void TIM3_IRQHandler(void) {
+
+    TIM3->SR &= ~TIM_SR_UIF;  
+
+    ADC1->CR |= ADC_CR_ADSTART;
+    // Wait for EOC bit
+    while ((ADC1->ISR & ADC_ISR_EOC) == 0);
+
+    int data = ADC1->DR;
+
+    if (data > 2) GPIOC->ODR |= GPIO_MODER_MODER0;
+    else GPIOC->ODR |= GPIO_MODER_MODER2;
+    
+
+
+}
+
+void init_tim3(void) {
+    
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
+
+    TIM3->PSC = 4800-1; // Trigger at 10 Hz
+    TIM3->ARR = 1000-1;
+
+    TIM3->DIER |= TIM_DIER_UIE;
+
+    NVIC_EnableIRQ(TIM3_IRQn);
+    
+    TIM3->CR1 |= TIM_CR1_CEN;
+    // NVIC_SetPriority(TIM2_IRQn, 3);
+
+}
+
+
 int main() {
     internal_clock();
     init_usart5();
@@ -341,12 +425,16 @@ int main() {
     pic_overlay(note,1,1,&red_note,0xffff);
 
     LCD_Setup();
+    displayStartMessage(0,0,0xFFFF, 0x0000, 12, 0);
+
+
     LCD_DrawPicture(0, 0, &background);
     // while(1){
     //     display_note(&red_note, lcddev.width/2, lcddev.height/2);   
     // }
     y_temp = 0;
     x_temp = lcddev.width/2 - red_note.width/2;
+
     init_tim2();
 
     // Diego:
