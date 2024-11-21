@@ -28,9 +28,9 @@ const char* username = "silva48";
 char serfifo[FIFOSIZE];
 int seroffset = 0;
 
-#define MIDDLE_POS 101
-#define LEFT_POS 32
-#define RIGHT_POS 171
+#define MIDDLE_POS 120
+#define LEFT_POS 50
+#define RIGHT_POS 190
 
 // This C macro will create an array of Picture elements.
 // Really, you'll just use it as a pointer to a single Picture
@@ -47,26 +47,35 @@ int seroffset = 0;
 // These can possibly be compressed further using 8 bit color and RLE compression
 extern const Picture background;
 extern const Picture red_note;
+extern const Picture up_note;
 
 // Copy a subset of a large source picture into a smaller destination
 // sx,sy are the offset into the source picture.
 uint32_t vol = 0;
 void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
 {
-    int dw = dst->width;
-    int dh = dst->height;
-    for(int y=0; y<dh; y++) {
-        if (y+sy < 0)
-            break; // changed from continue
-        if (y+sy >= src->height)
-            break;
-        for(int x=0; x<dw; x++) {
-            if (x+sx < 0)
-                continue;
-            if (x+sx >= src->width)
-                break;
-            dst->pix2[dw * y + x] = src->pix2[src->width * (y+sy) + x + sx];
-        }
+    // Pre-calculate constants
+    const int dw = dst->width;
+    const int dh = dst->height;
+    const int src_width = src->width;
+    
+    // Early bounds checking
+    if (sy >= src->height || sx >= src_width)
+        return;
+    
+    // Calculate actual copy bounds once
+    const int start_y = sy < 0 ? -sy : 0;
+    const int end_y = sy + dh > src->height ? src->height - sy : dh;
+    const int start_x = sx < 0 ? -sx : 0;
+    const int copy_width = ((sx + dw > src_width ? src_width - sx : dw) - start_x) * sizeof(uint16_t);
+    
+    // Pre-calculate base pointers
+    uint16_t *dst_base = dst->pix2 + start_x;
+    const uint16_t *src_base = src->pix2 + (sy + start_y) * src_width + sx + start_x;
+    
+    // Single-pass copy loop with fixed width
+    for(int y = start_y; y < end_y; y++) {
+        memcpy(dst_base + y * dw, src_base + y * src_width, copy_width);
     }
 }
 
@@ -78,21 +87,34 @@ void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
 // transparent color.
 void pic_overlay(Picture *dst, int xoffset, int yoffset, const Picture *src, int transparent)
 {
-    for(int y=0; y<src->height; y++) {
-        int dy = y+yoffset;
-        if (dy < 0)
-            continue;
-        if (dy >= dst->height)
-            break;
-        for(int x=0; x<src->width; x++) {
-            int dx = x+xoffset;
-            if (dx < 0)
-                continue;
-            if (dx >= dst->width)
-                break;
-            unsigned short int p = src->pix2[y*src->width + x];
-            if (p != transparent)
-                dst->pix2[dy*dst->width + dx] = p;
+    // Early bounds checking
+    if (yoffset >= dst->height || xoffset >= dst->width)
+        return;
+        
+    // Pre-calculate constants
+    const int src_width = src->width;
+    const int dst_width = dst->width;
+    
+    // Calculate actual copy bounds
+    const int start_y = (yoffset < 0) ? -yoffset : 0;
+    const int end_y = (yoffset + src->height > dst->height) ? dst->height - yoffset : src->height;
+    const int start_x = (xoffset < 0) ? -xoffset : 0;
+    const int end_x = (xoffset + src_width > dst_width) ? dst_width - xoffset : src_width;
+    
+    // Pre-calculate pointers and offsets
+    uint16_t *dst_ptr = dst->pix2 + (yoffset + start_y) * dst_width + xoffset;
+    const uint16_t *src_ptr = src->pix2 + start_y * src_width;
+    
+    // Main copy loop with fewer calculations
+    for(int y = start_y; y < end_y; y++) {
+        const uint16_t *src_row = src_ptr + y * src_width;
+        uint16_t *dst_row = dst_ptr + y * dst_width;
+        
+        for(int x = start_x; x < end_x; x++) {
+            uint16_t p = src_row[x];
+            if (p != transparent) {
+                dst_row[x] = p;
+            }
         }
     }
 }
@@ -179,27 +201,43 @@ void init_tim2(void) {
 }
 
 
+// Create a canvas to composite Pictures
+TempPicturePtr(canvas, 29, 31);
+
+#define x_offset 14 // canvas width/2
+#define y_offset 15 // canvas height/2
+
 void TIM2_IRQHandler() {
     // Acknowledge the interrupt
     TIM2->SR &= ~TIM_SR_UIF;
 
-    // Create a canvas
-    TempPicturePtr(canvas, 39, 21);
-
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
 
         note * current_note = &Track[i];
 
+        if (current_note->position + y_offset >= 0 && current_note->position - y_offset <= 320) {
+            // draw_pos are upper left corners of canvas
+            int x_draw_pos = current_note->string - x_offset;
+            int y_draw_pos = current_note->position - y_offset;
+
+            // Copy the background to canvas
+            pic_subset(canvas, &background, x_draw_pos, y_draw_pos);
+            
+            // Check the direction
+            // Overlay the object with color (0xF81F) set to transparent w/ 1 px padding on top/botom
+
+            if (current_note->dir == 0)
+                pic_overlay(canvas, 0, 1, &red_note, 0xF81F);
+            else
+                pic_overlay(canvas, 0, 1, &up_note, 0xF81F); 
+
+
+            // Draw the canvas
+            LCD_DrawPictureDMA(x_draw_pos, y_draw_pos, canvas);
+        }
+
         // Move the note down the screen
         current_note->position += 1;
-
-        // Copy the background to canvas
-        pic_subset(canvas, &background, current_note->string, current_note->position);
-        // Overlay the object with black (0x0) set to transparent w/ 1 px padding
-        pic_overlay(canvas, 0, 1, &red_note, 0x0);
-        // Draw the canvas
-        LCD_DrawPictureDMA(current_note->string, current_note->position, canvas);
-        
     }
 
 }
