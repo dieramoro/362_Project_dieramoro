@@ -95,4 +95,10 @@ typedef struct {
 
 void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic);
 
+// DMA functions for LCD
+void LCD_DMA_Init(void);
+void LCD_DMA_Start(const uint16_t * data, uint32_t length);
+void LCD_DMA_Stop(void);
+void LCD_DrawPictureDMA(u16 x0, u16 y0, const Picture *pic);
+
 #endif
