@@ -378,6 +378,24 @@ int score_reset = 0;
 
 note * note_pointer = &Track[0];
 
+int32_t readpin(int32_t pin_num) {
+    int32_t num = 0;
+    num = GPIOA->IDR;
+    num &= (1 << pin_num);
+
+    return (num);
+}
+
+int32_t readbuttons(){
+    int pin_value = 0;
+
+    if (readpin(8)) pin_value += LEFT_POS;
+    if (readpin(9)) pin_value += MIDDLE_POS;
+    if (readpin(10)) pin_value += RIGHT_POS;
+
+    return pin_value;
+}
+
 void TIM3_IRQHandler(void) {
 
     TIM3->SR &= ~TIM_SR_UIF;
@@ -410,7 +428,7 @@ void TIM3_IRQHandler(void) {
         if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played) {
             // CHECK BUTTONS
 
-            if (note_pointer->dir == UP_NOTE) {
+            if (note_pointer->dir == UP_NOTE && note_pointer->string == read_buttons) {
                 note_pointer->played = 1;
                 score++;
             } else {
