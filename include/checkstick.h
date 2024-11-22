@@ -1,7 +1,7 @@
 #include "stm32f0xx.h"
 #include <stdint.h>
 
-extern volatile int score;
+// extern volatile int score;
 
 int read_buttons(void);
 void togglexn(GPIO_TypeDef *port, int n);

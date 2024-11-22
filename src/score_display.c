@@ -1,3 +1,4 @@
+/*
 #include "stm32f0xx.h"
 #include <stdint.h>
 #include "score_display.h"
@@ -123,3 +124,4 @@ void small_delay(void)
 {
     nano_wait(50000);
 }
+*/

@@ -33,6 +33,13 @@ int seroffset = 0;
 #define LEFT_POS 50
 #define RIGHT_POS 190
 
+#define THRESHOLD 14
+#define Y_CENTER 287
+
+int score = 100;
+
+uint16_t msg[8] = { 0x0000,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700};
+
 // This C macro will create an array of Picture elements.
 // Really, you'll just use it as a pointer to a single Picture
 // element with an internal pix2[] array large enough to hold
@@ -58,6 +65,16 @@ const char font[] = {
     // digits
     0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x67
 };
+
+void display_score(int score) {
+    int temp_score = score;
+
+    for(int i = 7; i >= 0; i--) {
+        msg[i] &= ~font[8];
+        msg[i] |= font[temp_score % 10];
+        temp_score /= 10;
+    }
+}
 
 void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
 {
@@ -206,7 +223,6 @@ void init_tim2(void) {
     // Enable Timer 2
     TIM2->CR1 |= TIM_CR1_CEN;
 }
-uint16_t msg[8] = { 0x0000,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700};
 
 // Create a canvas to composite Pictures
 TempPicturePtr(canvas, 29, 31);
@@ -222,7 +238,7 @@ void TIM2_IRQHandler() {
 
         note * current_note = &Track[i];
 
-        if (current_note->position + y_offset >= 0 && current_note->position - y_offset <= 320 && !current_note->played) {
+        if (current_note->position + y_offset >= 0 && current_note->position - y_offset <= 320) {
             // draw_pos are upper left corners of canvas
             int x_draw_pos = current_note->string - x_offset;
             int y_draw_pos = current_note->position - y_offset;
@@ -241,6 +257,12 @@ void TIM2_IRQHandler() {
 
             // Draw the canvas
             LCD_DrawPictureDMA(x_draw_pos, y_draw_pos, canvas);
+
+            if (current_note->played == 0 && current_note->position > (Y_CENTER + THRESHOLD)) {
+                current_note->played = 1;
+                score--;
+                display_score(score);
+            }
         }
 
         // Move the note down the screen
@@ -352,12 +374,9 @@ void setup_adc(void) {
 int bcsum = 0;
 int boxcar[BCSIZE];
 int bcn = 0;
-int score_count = 0;
 int score_reset = 0;
 
 note * note_pointer = &Track[0];
-#define THRESHOLD 14
-#define Y_CENTER 287
 
 void TIM3_IRQHandler(void) {
 
@@ -379,19 +398,24 @@ void TIM3_IRQHandler(void) {
         bcn = 0;
     }
     vol = bcsum / BCSIZE;
-    if((score_count == 10) || (score_count < 0)){
-        score_count = 0;
-    }
+    //if((score_count == 10) || (score_count < 0)){
+    //    score_count = 0;
+    //}
     if ((vol > 3500) && (score_reset == 0)){
         // GPIOC->BSRR = GPIO_BSRR_BS_0;
         score_reset = 1;
         // score_count++;
         // msg[0] = font[score_count];
 
-        if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played && note_pointer->dir == UP_NOTE) {
+        if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played) {
             // CHECK BUTTONS
-            note_pointer->played = 1;
-            // INCREASE SCORE LATER
+
+            if (note_pointer->dir == UP_NOTE) {
+                note_pointer->played = 1;
+                score++;
+            } else {
+                score--;
+            }
         }
 
     } 
@@ -401,10 +425,14 @@ void TIM3_IRQHandler(void) {
         // score_count--;
         // msg[0] = font[score_count];
 
-        if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played && note_pointer->dir == DOwN_NOTE) {
+        if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played) {
             // CHECK BUTTONS
-            note_pointer->played = 1;
-            // INCREASE SCORE LATER
+            if (note_pointer->dir == DOwN_NOTE) {
+                note_pointer->played = 1;
+                score++;
+            } else {
+                score--;
+            }
         }
 
     } 
@@ -412,10 +440,10 @@ void TIM3_IRQHandler(void) {
     //     GPIOC->BSRR = GPIO_BSRR_BR_0;
     //     GPIOC->BSRR = GPIO_BSRR_BR_2;
         score_reset = 0;
-        msg[0] = font[score_count];
+        // msg[0] = font[score_count];
 
     }
-
+    display_score(score);
 }
 
 void init_tim3(void) {
