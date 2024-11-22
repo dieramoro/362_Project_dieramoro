@@ -23,7 +23,6 @@ const char* username = "silva48";
 #include <stdio.h>
 #include "lcd.h"
 #include "track.h"
-#include "checkstick.h"
 #define FIFOSIZE 16
 //#define MAX_Y_coordinate 2000
 char serfifo[FIFOSIZE];
@@ -427,13 +426,12 @@ void TIM3_IRQHandler(void) {
 
         if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played) {
             // CHECK BUTTONS
-
-            if (note_pointer->dir == UP_NOTE && note_pointer->string == read_buttons) {
+            if ((note_pointer->dir == UP_NOTE) && (note_pointer->string == readbuttons())) {
                 note_pointer->played = 1;
                 score++;
-            } else {
-                score--;
             }
+        } else {
+            score--;
         }
 
     } 
@@ -445,12 +443,12 @@ void TIM3_IRQHandler(void) {
 
         if (note_pointer->position > (Y_CENTER - THRESHOLD) && !note_pointer->played) {
             // CHECK BUTTONS
-            if (note_pointer->dir == DOwN_NOTE) {
+            if ((note_pointer->dir == DOwN_NOTE) && (note_pointer->string == readbuttons())) {
                 note_pointer->played = 1;
                 score++;
-            } else {
-                score--;
             }
+        } else {
+            score--;
         }
 
     } 
@@ -479,16 +477,6 @@ void init_tim3(void) {
     
     TIM3->CR1 |= TIM_CR1_CEN;
     NVIC_SetPriority(TIM2_IRQn, 3);
-}
-
-int32_t readpin(int32_t pin_num) {
-  int32_t num = 0;
-  num = GPIOB->IDR;
-
-  num = num << (0xf - pin_num);
-  num = num >>(0xf);
-  return (num);
-  
 }
 
 

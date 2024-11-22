@@ -37,7 +37,7 @@ def save_track_to_c_file():
     
     with open("src/track.c", "w") as f:
         f.write('#include "track.h"\n\n')
-        f.write("note Track[20] = {\n")
+        f.write("note Track[100] = {\n")
         
         for note in track:
             f.write(f"    {{ {note['position']}, {note['string']}, "
