@@ -12,7 +12,7 @@
 #define THRESHOLD 20
 #define Y_CENTER 287
 
-int score = 1;
+int score = 0;
 int mult = 0;
 int mult_count = 0;
 
@@ -60,9 +60,11 @@ void increase_score() {
  void decrase_score() {
     mult_count = 0;
     mult = 0;
+    /* removed to make it easier :)
     score--;
     if (score < 0)
         score = 0;
+    */
  }
 
 void display_score() {
@@ -78,6 +80,12 @@ void display_score() {
             temp_score /= 10;
         }
     }
+    /*
+    if (score = 0) {
+        msg[7] &= ~font[8];
+        msg[7] |= font[0];
+    }
+    */
 }
 
 void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
