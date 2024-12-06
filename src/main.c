@@ -160,10 +160,6 @@ void pic_overlay(Picture *dst, int xoffset, int yoffset, const Picture *src, int
 
 void internal_clock();
 
-// Uncomment only one of the following to test each step
-#define SHELL
-
-#ifdef SHELL
 void init_spi1_slow(){
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
     GPIOB->MODER &= ~(GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
@@ -184,30 +180,11 @@ void init_spi1_slow(){
 }
 
 
-void enable_sdcard(){
-    GPIOB->BSRR &= ~(GPIO_BSRR_BS_2);
-    GPIOB->BSRR |= (GPIO_BSRR_BR_2);
-}
-
-void disable_sdcard(){
-    GPIOB->BSRR |= (GPIO_BSRR_BS_2);
-    GPIOB->BSRR &= ~(GPIO_BSRR_BR_2);
-}
-
-void init_sdcard_io(){
-    init_spi1_slow();
-    GPIOB->MODER &= ~(GPIO_MODER_MODER2);
-    GPIOB->MODER |= (GPIO_MODER_MODER2_0);
-    disable_sdcard();
-}
-
-
 void sdcard_io_high_speed(){
     SPI1->CR1 &= ~(SPI_CR1_SPE);
     SPI1->CR1 &= ~(0x0038);
     SPI1->CR1 |= 0x0008;
     SPI1->CR1 |= SPI_CR1_SPE;
-
 }
 
 void init_lcd_spi(){
@@ -273,17 +250,8 @@ void TIM2_IRQHandler() {
 }
 
 void displayStartMessage(u16 x, u16 y, u16 fc, u16 bg, u8 size, u8 mode) {
-    const char *message = "Press all three note buttons to start";
+    const char *message = "Press all buttons to start";
     LCD_DrawString(x, y, fc, bg, message, size, mode);
-    // while (1) {
-    //     // Check the state of buttons (assumes buttons are active low)
-    //     if ((GPIOA->IDR & (1 << 0)) != 0 &&  // PA0 pressed
-    //         (GPIOA->IDR & (1 << 1)) != 0 &&  // PA1 pressed
-    //         (GPIOA->IDR & (1 << 2)) != 0) {  // PA2 pressed
-    //         break;  // Exit the loop when all buttons are pressed
-    //     }
-    // }
-
 }
 
 void init_spi2(void) {
@@ -496,7 +464,10 @@ int main() {
     enable_ports();
     setup_adc();
 
+    displayStartMessage(15,120,0xffff,0x0000,16,0);
+
     while (readbuttons() != LEFT_POS + MIDDLE_POS + RIGHT_POS);
+    LCD_DrawPicture(0, 0, &background);
 
     init_tim3();
     init_tim2();
@@ -528,4 +499,3 @@ int main() {
         }
     }
 }
-#endif
