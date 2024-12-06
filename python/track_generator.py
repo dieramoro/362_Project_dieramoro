@@ -10,7 +10,7 @@ DOWN_NOTE = 0
 UP_NOTE = 1
 
 NUMBER_OF_NOTES = 100
-INTERVAL = 160
+INTERVAL = 50
 
 def generate_track():
     track = []

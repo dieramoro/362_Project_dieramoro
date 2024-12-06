@@ -1,43 +1,22 @@
-/**
-  ******************************************************************************
-  * @file    main.c
-  * @author  Weili An, Niraj Menon
-  * @date    Feb 7, 2024
-  * @brief   ECE 362 Lab 7 student template
-  ******************************************************************************
-*/
-
-/*******************************************************************************/
-
-// Fill out your username!  Even though we're not using an autotest, 
-// it should be a habit to fill out your username in this field now.
-const char* username = "silva48";
-
-/*******************************************************************************/ 
-
 #include "stm32f0xx.h"
 #include <stdint.h>
-#include "fifo.h"
-#include "tty.h"
 #include <math.h> 
 #include <stdio.h>
 #include "lcd.h"
 #include "track.h"
-#define FIFOSIZE 16
-//#define MAX_Y_coordinate 2000
-char serfifo[FIFOSIZE];
-int seroffset = 0;
 
 #define MIDDLE_POS 120
 #define LEFT_POS 50
 #define RIGHT_POS 190
 
-#define THRESHOLD 14
+#define THRESHOLD 20
 #define Y_CENTER 287
 
-int score = 100;
+int score = 1;
+int mult = 0;
+int mult_count = 0;
 
-uint16_t msg[8] = { 0x0000,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700};
+uint16_t msg[8] = { 0x0076,0x0100,0x0200,0x0300,0x0400,0x0500,0x0600,0x0700};
 
 // This C macro will create an array of Picture elements.
 // Really, you'll just use it as a pointer to a single Picture
@@ -56,49 +35,75 @@ extern const Picture background;
 extern const Picture red_note;
 extern const Picture up_note;
 
-// Copy a subset of a large source picture into a smaller destination
-// sx,sy are the offset into the source picture.
 uint32_t vol = 0;
 
 const char font[] = {
     // digits
     0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x67
 };
+ 
+void increase_score() {
+    mult_count++;
 
-void display_score(int score) {
+    if (mult_count >= 20)
+        mult = 3;
+    else if (mult_count >= 10)
+        mult = 2;
+    else if (mult_count >= 5)
+        mult = 1;
+    else
+        mult = 0;
+
+    score = score + (1 << mult);
+ }
+
+ void decrase_score() {
+    mult_count = 0;
+    mult = 0;
+    score--;
+    if (score < 0)
+        score = 0;
+ }
+
+void display_score() {
     int temp_score = score;
 
-    for(int i = 7; i >= 0; i--) {
+    msg[1] &= ~font[8];
+    msg[1] |= font[1 << mult];
+
+    for(int i = 7; i >= 4; i--) {
         msg[i] &= ~font[8];
-        msg[i] |= font[temp_score % 10];
-        temp_score /= 10;
+        if (temp_score != 0) {
+            msg[i] |= font[temp_score % 10];
+            temp_score /= 10;
+        }
     }
 }
 
 void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
 {
-    // Pre-calculate constants
     const int dw = dst->width;
     const int dh = dst->height;
-    const int src_width = src->width;
-    
-    // Early bounds checking
-    if (sy >= src->height || sx >= src_width)
-        return;
-    
-    // Calculate actual copy bounds once
-    const int start_y = sy < 0 ? -sy : 0;
-    const int end_y = sy + dh > src->height ? src->height - sy : dh;
-    const int start_x = sx < 0 ? -sx : 0;
-    const int copy_width = ((sx + dw > src_width ? src_width - sx : dw) - start_x) * sizeof(uint16_t);
-    
-    // Pre-calculate base pointers
-    uint16_t *dst_base = dst->pix2 + start_x;
-    const uint16_t *src_base = src->pix2 + (sy + start_y) * src_width + sx + start_x;
-    
-    // Single-pass copy loop with fixed width
-    for(int y = start_y; y < end_y; y++) {
-        memcpy(dst_base + y * dw, src_base + y * src_width, copy_width);
+    const int sw = src->width;
+    const int sh = src->height;
+
+    // Calculate clipped copy bounds
+    int start_y = (sy < 0) ? -sy : 0;
+    int end_y   = (sy + dh > sh) ? (sh - sy) : dh;
+
+    int start_x = (sx < 0) ? -sx : 0;
+    int effective_width = (sx + dw > sw) ? (sw - sx) : dw; 
+    int copy_w = effective_width - start_x;
+
+    if (copy_w <= 0 || end_y <= start_y) {
+        return; // Nothing to copy after clipping
+    }
+
+    uint16_t *dst_line = dst->pix2 + start_x;
+    const uint16_t *src_line = src->pix2 + (sy + start_y) * sw + (sx + start_x);
+
+    for (int y = start_y; y < end_y; y++) {
+        memcpy(dst_line + y * dw, src_line + y * sw, copy_w * sizeof(uint16_t));
     }
 }
 
@@ -108,35 +113,45 @@ void pic_subset(Picture *dst, const Picture *src, int sx, int sy)
 // Any pixel in the source that is the 'transparent' color will not be
 // copied.  This defines a color in the source that can be used as a
 // transparent color.
+// Optional: If you have a precomputed mask for the source image where bit=1 means opaque.
+// This is just a conceptual snippet. The mask would be computed beforehand.
+// uint8_t *src_mask; // For each pixel, a bit indicating if opaque or not.
+
 void pic_overlay(Picture *dst, int xoffset, int yoffset, const Picture *src, int transparent)
 {
-    // Early bounds checking
-    if (yoffset >= dst->height || xoffset >= dst->width)
-        return;
-        
-    // Pre-calculate constants
-    const int src_width = src->width;
-    const int dst_width = dst->width;
-    
-    // Calculate actual copy bounds
-    const int start_y = (yoffset < 0) ? -yoffset : 0;
-    const int end_y = (yoffset + src->height > dst->height) ? dst->height - yoffset : src->height;
-    const int start_x = (xoffset < 0) ? -xoffset : 0;
-    const int end_x = (xoffset + src_width > dst_width) ? dst_width - xoffset : src_width;
-    
-    // Pre-calculate pointers and offsets
-    uint16_t *dst_ptr = dst->pix2 + (yoffset + start_y) * dst_width + xoffset;
-    const uint16_t *src_ptr = src->pix2 + start_y * src_width;
-    
-    // Main copy loop with fewer calculations
-    for(int y = start_y; y < end_y; y++) {
-        const uint16_t *src_row = src_ptr + y * src_width;
-        uint16_t *dst_row = dst_ptr + y * dst_width;
-        
-        for(int x = start_x; x < end_x; x++) {
-            uint16_t p = src_row[x];
+    const int sw = src->width;
+    const int sh = src->height;
+    const int dw = dst->width;
+    const int dh = dst->height;
+
+    // Only allow padding (negative offset) for top edge
+    int start_y = (yoffset < 0) ? -yoffset : 0;
+    // For bottom edge, strictly clip to destination bounds
+    int end_y = (yoffset + sh > dh) ? (dh - yoffset) : sh;
+
+    // Strict clipping for left and right edges
+    int start_x = (xoffset < 0) ? -xoffset : 0;
+    int end_x = (xoffset + sw > dw) ? (dw - xoffset) : sw;
+
+    if (end_y <= start_y || end_x <= start_x || yoffset >= dh) {
+        return; // Nothing to draw
+    }
+
+    // Rest of the function remains the same...
+    uint16_t *dst_ptr = dst->pix2 + (yoffset + start_y) * dw + (xoffset + start_x);
+    const uint16_t *src_ptr = src->pix2 + start_y * sw + start_x;
+
+    int copy_height = end_y - start_y;
+    int copy_width = end_x - start_x;
+
+    for (int row = 0; row < copy_height; row++) {
+        const uint16_t *src_row = src_ptr + row * sw;
+        uint16_t *dst_row = dst_ptr + row * dw;
+
+        for (int col = 0; col < copy_width; col++) {
+            uint16_t p = src_row[col];
             if (p != transparent) {
-                dst_row[x] = p;
+                dst_row[col] = p;
             }
         }
     }
@@ -149,7 +164,6 @@ void internal_clock();
 #define SHELL
 
 #ifdef SHELL
-#include "commands.h"
 void init_spi1_slow(){
     RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
     GPIOB->MODER &= ~(GPIO_MODER_MODER3 | GPIO_MODER_MODER4 | GPIO_MODER_MODER5);
@@ -210,7 +224,7 @@ void init_tim2(void) {
 
     // Set the Prescaler (PSC) and Auto-Reload Register (ARR) to achieve 30 fps
     TIM2->PSC = 480 - 1;  // Prescaler to divide 48 MHz to 1 kHz
-    TIM2->ARR = 600 - 1;
+    TIM2->ARR = 800 - 1;
 
     // Enable the UIE bit in the DIER to enable the UIE flag
     // This will enable an update interrupt to occur each time the free-running counter of the timer reaches the ARR value and starts back at zero.
@@ -224,51 +238,38 @@ void init_tim2(void) {
 }
 
 // Create a canvas to composite Pictures
-TempPicturePtr(canvas, 29, 31);
+TempPicturePtr(canvas, 29, 35);
 
 #define x_offset 14 // canvas width/2
-#define y_offset 15 // canvas height/2
+#define y_offset 18 // canvas height/2
+
+volatile int display_update_needed = 0;
+volatile int notes_to_update[100];  // Track which notes need updating
+volatile int notes_update_count = 0;
 
 void TIM2_IRQHandler() {
     // Acknowledge the interrupt
     TIM2->SR &= ~TIM_SR_UIF;
+    
+    notes_update_count = 0;  // Reset count for this frame
 
     for (int i = 0; i < 100; i++) {
-
         note * current_note = &Track[i];
-
-        if (current_note->position + y_offset >= 0 && current_note->position - y_offset <= 320) {
-            // draw_pos are upper left corners of canvas
-            int x_draw_pos = current_note->string - x_offset;
-            int y_draw_pos = current_note->position - y_offset;
-
-            // Copy the background to canvas
-            pic_subset(canvas, &background, x_draw_pos, y_draw_pos);
-            
-            // Check the direction
-            // Overlay the object with color (0xF81F) set to transparent w/ 1 px padding on top/botom
-
-            if (current_note->dir == 0)
-                pic_overlay(canvas, 0, 1, &red_note, 0xF81F);
-            else
-                pic_overlay(canvas, 0, 1, &up_note, 0xF81F); 
-
-
-            // Draw the canvas
-            LCD_DrawPictureDMA(x_draw_pos, y_draw_pos, canvas);
-
-            if (current_note->played == 0 && current_note->position > (Y_CENTER + THRESHOLD)) {
-                current_note->played = 1;
-                score--;
-                display_score(score);
-            }
-        }
-
+        
         // Move the note down the screen
         current_note->position += 1;
-        
-    }
 
+        if (current_note->position + y_offset >= 0 && current_note->position - y_offset <= 320) {
+            // Mark this note for update
+            notes_to_update[notes_update_count++] = i;
+        }
+
+        if (current_note->played == 0 && current_note->position > (Y_CENTER + THRESHOLD)) {
+            current_note->played = 1;
+            decrase_score();
+            display_update_needed = 1;
+        }
+    }
 }
 
 void displayStartMessage(u16 x, u16 y, u16 fc, u16 bg, u8 size, u8 mode) {
@@ -299,8 +300,6 @@ void init_spi2(void) {
     SPI2->CR1 |= SPI_CR1_SPE;
 
 }
-
-
 
 void spi2_setup_dma(void) {
     SPI2->CR2 |= SPI_CR2_TXDMAEN;
@@ -428,10 +427,10 @@ void TIM3_IRQHandler(void) {
             // CHECK BUTTONS
             if ((note_pointer->dir == UP_NOTE) && (note_pointer->string == readbuttons())) {
                 note_pointer->played = 1;
-                score++;
+                increase_score();
             }
         } else {
-            score--;
+            decrase_score();
         }
 
     } 
@@ -445,10 +444,10 @@ void TIM3_IRQHandler(void) {
             // CHECK BUTTONS
             if ((note_pointer->dir == DOwN_NOTE) && (note_pointer->string == readbuttons())) {
                 note_pointer->played = 1;
-                score++;
+                increase_score();
             }
         } else {
-            score--;
+            decrase_score();
         }
 
     } 
@@ -459,7 +458,7 @@ void TIM3_IRQHandler(void) {
         // msg[0] = font[score_count];
 
     }
-    display_score(score);
+    display_score();
 }
 
 void init_tim3(void) {
@@ -485,7 +484,6 @@ int main() {
     internal_clock();
 
     LCD_Setup();
-    // displayStartMessage(0,0,0xFFFF, 0x0000, 12, 0);
     init_spi2();
     spi2_setup_dma();
     spi2_enable_dma();
@@ -497,8 +495,37 @@ int main() {
     LCD_DrawPicture(0, 0, &background);
     enable_ports();
     setup_adc();
-    init_tim3();
 
+    while (readbuttons() != LEFT_POS + MIDDLE_POS + RIGHT_POS);
+
+    init_tim3();
     init_tim2();
+
+    while(1) {
+        // Handle display updates outside the interrupt
+        if (notes_update_count > 0) {
+            for (int i = 0; i < notes_update_count; i++) {
+                note * current_note = &Track[notes_to_update[i]];
+                
+                int x_draw_pos = current_note->string - x_offset;
+                int y_draw_pos = current_note->position - y_offset;
+
+                pic_subset(canvas, &background, x_draw_pos, y_draw_pos);
+                
+                if (current_note->dir == 0)
+                    pic_overlay(canvas, 0, 6, &red_note, 0xffff);
+                else
+                    pic_overlay(canvas, 0, 6, &up_note, 0xffff);
+
+                LCD_DrawPictureDMA(x_draw_pos, y_draw_pos, canvas);
+            }
+            notes_update_count = 0;  // Reset after handling
+        }
+
+        if (display_update_needed) {
+            display_score();
+            display_update_needed = 0;
+        }
+    }
 }
 #endif

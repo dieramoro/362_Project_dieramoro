@@ -1071,52 +1071,79 @@ void LCD_DMA_Stop(void) {
     DMA1_Channel3->CCR &= ~DMA_CCR_EN;
 }
 
-void LCD_DrawPictureDMA(u16 x0, u16 y0, const Picture *pic)
+// Assumes LCD_SetWindow, LCD_WriteData16_Prepare, LCD_WriteData16_End,
+// LCD_DMA_Start, LCD_DMA_Stop, and hardware definitions are available.
+
+void LCD_DrawPictureDMA(int16_t x0, int16_t y0, const Picture *pic)
 {
-    int x1 = x0 + pic->width-1;
-    int y1 = y0 + pic->height-1;
-    if (x0 >= lcddev.width || y0 >= lcddev.height || x1 < 0 || y1 < 0)
-        return; // Completely outside of screen.  Nothing to do.
-    
-    lcddev.select(1);
-    int xs=0, ys=0;
-    int xe=pic->width, ye=pic->height;
-    
-    // Handle clipping
+    int16_t w = pic->width;
+    int16_t h = pic->height;
+
+    int16_t x1 = x0 + w - 1;
+    int16_t y1 = y0 + h - 1;
+
+    // Early reject if off screen
+    if (x0 >= lcddev.width || y0 >= lcddev.height || x1 < 0 || y1 < 0) {
+        return;
+    }
+
+    // Clipping calculations
+    int16_t xs = 0, ys = 0;
+    int16_t xe = w, ye = h;
+
     if (x0 < 0) { xs = -x0; x0 = 0; }
     if (y0 < 0) { ys = -y0; y0 = 0; }
-    if (x1 >= lcddev.width) { xe -= x1 - (lcddev.width - 1); x1 = lcddev.width - 1; }
-    if (y1 >= lcddev.height) { ye -= y1 - (lcddev.height - 1); y1 = lcddev.height - 1; }
+    if (x1 >= lcddev.width) {
+        xe -= (x1 - (lcddev.width - 1));
+        x1 = lcddev.width - 1;
+    }
+    if (y1 >= lcddev.height) {
+        ye -= (y1 - (lcddev.height - 1));
+        y1 = lcddev.height - 1;
+    }
 
+    int16_t draw_w = xe - xs;
+    int16_t draw_h = ye - ys;
+
+    if (draw_w <= 0 || draw_h <= 0) {
+        return; // Nothing to draw after clipping
+    }
+
+    // Set window once
+    lcddev.select(1);
     LCD_SetWindow(x0, y0, x1, y1);
     LCD_WriteData16_Prepare();
 
-    // Calculate total number of pixels to transfer
-    uint32_t total_pixels = (xe - xs) * (ye - ys);
-    
-    // Get pointer to start of data, accounting for clipping
-    u16 *data = (u16 *)pic->pixel_data + (ys * pic->width + xs);
+    // Pointer to image data start (clipped)
+    uint16_t *data = (uint16_t *)pic->pixel_data + (ys * w + xs);
+    uint32_t total_pixels = (uint32_t)draw_w * (uint32_t)draw_h;
 
-    // Wait for SPI to finish
+    // Wait for SPI Ready (if SPI is used)
     while ((SPI1->SR & SPI_SR_TXE) == 0);
-    
-    // If image is contiguous in memory (no clipping on x-axis), send it all at once
-    if (xs == 0 && xe == pic->width) {
+
+    // If fully un-clipped horizontally, send in one go
+    if (xs == 0 && xe == w) {
+        // Start DMA transfer
         LCD_DMA_Start(data, total_pixels);
-        while((DMA1->ISR & DMA_ISR_TCIF3) == 0);
+        // Instead of polling, consider using interrupts:
+        // Wait for DMA transfer complete interrupt or event
+        while ((DMA1->ISR & DMA_ISR_TCIF3) == 0);
         DMA1->IFCR = DMA_IFCR_CTCIF3;
     } else {
-        // If image is clipped on x-axis, we still need to send row by row
-        int row_width = xe - xs;
-        for(int y = ys; y < ye; y++) {
-            LCD_DMA_Start(&data[y * pic->width], row_width);
-            while((DMA1->ISR & DMA_ISR_TCIF3) == 0);
+        // Need to send row by row
+        int row_width = draw_w;
+        uint16_t *row_ptr = data;
+        for (int row = 0; row < draw_h; row++) {
+            LCD_DMA_Start(row_ptr, row_width);
+            // Wait for transfer complete
+            while ((DMA1->ISR & DMA_ISR_TCIF3) == 0);
             DMA1->IFCR = DMA_IFCR_CTCIF3;
+
+            row_ptr += w; // Move to next line in source image
         }
     }
-    
-    LCD_DMA_Stop();
 
+    LCD_DMA_Stop();
     LCD_WriteData16_End();
     lcddev.select(0);
 }

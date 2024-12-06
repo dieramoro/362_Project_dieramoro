@@ -99,6 +99,6 @@ void LCD_DrawPicture(u16 x0, u16 y0, const Picture *pic);
 void LCD_DMA_Init(void);
 void LCD_DMA_Start(const uint16_t * data, uint32_t length);
 void LCD_DMA_Stop(void);
-void LCD_DrawPictureDMA(u16 x0, u16 y0, const Picture *pic);
+void LCD_DrawPictureDMA(int16_t x0, int16_t y0, const Picture *pic);
 
 #endif
